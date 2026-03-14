@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>YOLOv8 Motion Detection PoC</title>
+    <style>
+      :root {
+        --bg: #111827;
+        --fg: #f9fafb;
+        --accent: #22c55e;
+        --warn: #f59e0b;
+      }
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+        background: radial-gradient(circle at top, #1f2937, var(--bg));
+        color: var(--fg);
+      }
+      .wrap {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 16px;
+      }
+      h1 {
+        font-size: 1.2rem;
+      }
+      #videoWrap {
+        position: relative;
+        border-radius: 12px;
+        overflow: hidden;
+        background: #000;
+      }
+      video,
+      canvas {
+        width: 100%;
+        display: block;
+      }
+      #overlay {
+        position: absolute;
+        left: 0;
+        top: 0;
+      }
+      button {
+        margin-top: 12px;
+        border: none;
+        border-radius: 8px;
+        padding: 10px 14px;
+        font-weight: 600;
+        background: var(--accent);
+        color: #052e16;
+      }
+      #status {
+        margin-top: 8px;
+        color: #d1d5db;
+      }
+      .hint {
+        color: #9ca3af;
+        font-size: 0.9rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>YOLOv8 動作検出 PoC（手上げ検出）</h1>
+      <p class="hint">同一Wi-Fi上のスマホからこのページを開いて、開始を押してください。</p>
+      <div id="videoWrap">
+        <video id="video" playsinline autoplay muted></video>
+        <canvas id="overlay"></canvas>
+      </div>
+      <button id="startBtn">カメラ開始</button>
+      <p id="status">未開始</p>
+    </div>
+
+    <script>
+      const video = document.getElementById("video");
+      const overlay = document.getElementById("overlay");
+      const statusEl = document.getElementById("status");
+      const startBtn = document.getElementById("startBtn");
+      const ctx = overlay.getContext("2d");
+      const captureCanvas = document.createElement("canvas");
+      const captureCtx = captureCanvas.getContext("2d");
+
+      let running = false;
+
+      function drawDetections(detections, width, height) {
+        overlay.width = width;
+        overlay.height = height;
+        ctx.clearRect(0, 0, width, height);
+        ctx.lineWidth = 3;
+        ctx.font = "16px sans-serif";
+
+        detections.forEach((d) => {
+          const [x1, y1, x2, y2] = d.bbox;
+          const w = x2 - x1;
+          const h = y2 - y1;
+          ctx.strokeStyle = d.actions.includes("hand_raised") ? "#f59e0b" : "#22c55e";
+          ctx.strokeRect(x1, y1, w, h);
+          const label = d.actions.length ? d.actions.join(", ") : "person";
+          ctx.fillStyle = "rgba(0,0,0,0.55)";
+          ctx.fillRect(x1, Math.max(0, y1 - 24), 160, 22);
+          ctx.fillStyle = "#fff";
+          ctx.fillText(label, x1 + 6, Math.max(16, y1 - 8));
+        });
+      }
+
+      async function sendFrame() {
+        if (!running || video.videoWidth === 0 || video.videoHeight === 0) return;
+        captureCanvas.width = video.videoWidth;
+        captureCanvas.height = video.videoHeight;
+        captureCtx.drawImage(video, 0, 0);
+        const blob = await new Promise((resolve) => captureCanvas.toBlob(resolve, "image/jpeg", 0.7));
+
+        const form = new FormData();
+        form.append("file", blob, "frame.jpg");
+
+        try {
+          const res = await fetch("/detect", { method: "POST", body: form });
+          const data = await res.json();
+          drawDetections(data.detections || [], video.videoWidth, video.videoHeight);
+          statusEl.textContent = `検出人数: ${(data.detections || []).length}`;
+        } catch (e) {
+          statusEl.textContent = `通信エラー: ${e}`;
+        }
+      }
+
+      startBtn.addEventListener("click", async () => {
+        const isLocalhost =
+          location.hostname === "localhost" || location.hostname === "127.0.0.1";
+        if (!window.isSecureContext && !isLocalhost) {
+          statusEl.textContent =
+            "カメラ起動失敗: HTTPSでアクセスしてください（localhost以外のHTTPではカメラ不可）";
+          return;
+        }
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          statusEl.textContent =
+            "カメラ起動失敗: このブラウザ/接続では getUserMedia が利用できません";
+          return;
+        }
+        try {
+          let stream;
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: { facingMode: "environment" },
+              audio: false,
+            });
+          } catch {
+            // Some devices reject facingMode constraints; retry with generic camera.
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: true,
+              audio: false,
+            });
+          }
+          video.srcObject = stream;
+          running = true;
+          statusEl.textContent = "推論中...";
+          setInterval(sendFrame, 600);
+        } catch (e) {
+          statusEl.textContent = `カメラ起動失敗: ${e}`;
+        }
+      });
+    </script>
+  </body>
+</html>
