@@ -23,7 +23,11 @@ app/
   structure.py     # 単一フレームからの床構造推定
   heatmap.py       # セッション、射影、ヒートマップ永続化
 static/
-  index.html       # 単一ページ UI
+  index.html       # DOM 構造と最小限のスタイル
+  app.js           # 画面状態の接着
+  api-client.js    # FastAPI との通信
+  camera.js        # カメラ起動と frame capture
+  history.js       # localStorage と履歴描画
 docs/
   architecture.md  # この設計メモ
 ```
@@ -31,7 +35,11 @@ docs/
 ## Dependency Direction
 
 ```text
-static/index.html -> FastAPI API
+static/index.html -> static/app.js
+static/app.js -> static/api-client.js
+static/app.js -> static/camera.js
+static/app.js -> static/history.js
+static/api-client.js -> FastAPI API
 app/main.py -> app/api.py
 app/api.py -> app/detection.py
 app/api.py -> app/structure.py
@@ -79,5 +87,5 @@ app/heatmap.py -> cv2 / numpy / filesystem
 ## Next Step
 
 - API schema が増えたら `pydantic` の request/response model を追加する
-- UI が大きくなったら `static/index.html` の script を `static/app.js` へ分離する
+- 画面がさらに増えるなら `static/app.js` に残った表示更新も `ui.js` へ切り出す
 - 精度改善に進むなら `structure.py` を「簡易推定」と「手動補正」に分ける
