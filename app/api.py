@@ -15,7 +15,7 @@ from app.structure import estimate_projection_from_frame
 def register_routes(app: FastAPI, detector: YOLOPersonDetector, session_store: SessionStore) -> None:
     @app.get("/")
     def root() -> FileResponse:
-        return FileResponse("static/index.html")
+        return FileResponse("static/dist/index.html")
 
     @app.get("/health")
     def health() -> dict[str, str]:

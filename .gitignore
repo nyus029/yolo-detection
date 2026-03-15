@@ -26,3 +26,5 @@ Thumbs.db
 .env
 
 /artifacts
+
+node_modules/

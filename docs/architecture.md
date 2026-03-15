@@ -11,7 +11,7 @@
 - HTTP 入出力と業務ロジックが `app/main.py` に集中している
 - YOLO 推論の都合で API 層のテストがしにくい
 - 構造推定ロジックの差し替え先がない
-- 将来 `storage` や `calibration` を追加するとさらに混ざる
+- フロントエンドは今後 component 単位で分割できる前提が必要
 
 ## Target Structure
 
@@ -22,12 +22,20 @@ app/
   detection.py     # YOLO person detection
   structure.py     # 単一フレームからの床構造推定
   heatmap.py       # セッション、射影、ヒートマップ永続化
+frontend/
+  src/
+    App.svelte     # 単一画面の Svelte component
+    lib/
+      api-client.ts
+      camera.ts
+      history.ts
+      types.ts
+  index.html
+  svelte.config.js
+  tsconfig.json
+  vite.config.ts
 static/
-  index.html       # DOM 構造と最小限のスタイル
-  app.js           # 画面状態の接着
-  api-client.js    # FastAPI との通信
-  camera.js        # カメラ起動と frame capture
-  history.js       # localStorage と履歴描画
+  dist/            # Vite build の出力先
 docs/
   architecture.md  # この設計メモ
 ```
@@ -35,11 +43,12 @@ docs/
 ## Dependency Direction
 
 ```text
-static/index.html -> static/app.js
-static/app.js -> static/api-client.js
-static/app.js -> static/camera.js
-static/app.js -> static/history.js
-static/api-client.js -> FastAPI API
+frontend/src/App.svelte -> frontend/src/lib/api-client.ts
+frontend/src/App.svelte -> frontend/src/lib/camera.ts
+frontend/src/App.svelte -> frontend/src/lib/history.ts
+frontend/src/lib/api-client.ts -> FastAPI API
+frontend build -> static/dist
+FastAPI / -> static/dist/index.html
 app/main.py -> app/api.py
 app/api.py -> app/detection.py
 app/api.py -> app/structure.py
@@ -56,7 +65,7 @@ app/heatmap.py -> cv2 / numpy / filesystem
 ### `app/main.py`
 
 - `FastAPI` の生成
-- static mount
+- built frontend の static mount
 - detector / session store の生成
 - route 登録
 
@@ -84,8 +93,27 @@ app/heatmap.py -> cv2 / numpy / filesystem
 - `SessionStore`
 - PNG / JSON の保存
 
+### `frontend/src/App.svelte`
+
+- 画面全体の state
+- 入力フォーム
+- カメラ、計測、履歴 UI の統合
+
+### `frontend/src/lib/api-client.ts`
+
+- FastAPI endpoint 呼び出し
+
+### `frontend/src/lib/camera.ts`
+
+- `getUserMedia`
+- frame capture
+
+### `frontend/src/lib/history.ts`
+
+- `localStorage` 読み書き
+
 ## Next Step
 
 - API schema が増えたら `pydantic` の request/response model を追加する
-- 画面がさらに増えるなら `static/app.js` に残った表示更新も `ui.js` へ切り出す
+- Svelte component が増えるなら `App.svelte` を `components/` と `stores/` に分割する
 - 精度改善に進むなら `structure.py` を「簡易推定」と「手動補正」に分ける

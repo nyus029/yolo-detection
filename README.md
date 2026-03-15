@@ -10,10 +10,16 @@ make setup
 
 ## 起動
 
+Svelte + TypeScript フロントエンドを配信するには、最初にビルドします。
+
 ```bash
+make frontend-build
 make run
 ```
 
+- `make run` は FastAPI を `:8000` で起動し、`static/dist` のビルド済みフロントエンドを配信します。
+- フロントエンドを単体開発する場合は別ターミナルで `make frontend-dev` を使います。
+- `make frontend-dev` の開発サーバは通常 `http://127.0.0.1:5173` で起動し、API は `:8000` に proxy されます。
 - PCでサーバを起動し、同じWi-Fiのスマホで `http://<PCのIP>:8000` を開きます。
 - `カメラ起動` -> `部屋の構造推定` -> `計測開始` の順で進めます。
 - `部屋の構造推定` は現在フレームから床開始位置や見かけ幅を推定し、投影パラメータへ自動反映します。
@@ -70,6 +76,12 @@ ipconfig getifaddr en1
 - `GET /session/{session_id}/heatmap.png`
 - `POST /detect`
   - multipart: `file`, `session_id`（任意）
+
+## フロントエンド構成
+
+- `frontend/`: Svelte + TypeScript + Vite のソースコード
+- `static/dist/`: Vite build の出力先
+- FastAPI は `/` で `static/dist/index.html` を返し、`/static` でビルド済み asset を配信します
 
 ## 保存先
 
