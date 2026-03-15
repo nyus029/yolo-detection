@@ -90,12 +90,11 @@
     const planeY = 26;
     const planeWidth = width - 52;
     const planeHeight = height - 52;
-    const layout = computeRoomLayout(planeX, planeY, planeWidth, planeHeight, projection);
+    const layout = computeRoomLayout(planeX, planeY, planeWidth, planeHeight, roomWidthUnits, roomHeightUnits);
     const roomLeft = layout.roomX;
     const roomTop = layout.roomY;
     const roomRight = layout.roomX + layout.roomWidth;
     const roomBottom = layout.roomY + layout.roomHeight;
-    const doorwayHalf = layout.cameraDoorWidth / 2;
 
     const floorGradient = ctx.createLinearGradient(roomLeft, roomTop, roomRight, roomBottom);
     floorGradient.addColorStop(0, "#fffdf8");
@@ -167,16 +166,6 @@
       ctx.restore();
     }
 
-    ctx.strokeStyle = "rgba(148, 163, 184, 0.5)";
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(layout.visibleZone[0].x, layout.visibleZone[0].y);
-    for (let index = 1; index < layout.visibleZone.length; index += 1) {
-      ctx.lineTo(layout.visibleZone[index].x, layout.visibleZone[index].y);
-    }
-    ctx.closePath();
-    ctx.stroke();
-
     ctx.strokeStyle = "#3f3f46";
     ctx.lineWidth = layout.wallThickness;
     ctx.lineCap = "square";
@@ -188,29 +177,7 @@
     ctx.moveTo(roomRight, roomTop);
     ctx.lineTo(roomRight, roomBottom);
     ctx.moveTo(roomLeft, roomBottom);
-    ctx.lineTo(layout.cameraX - doorwayHalf, roomBottom);
-    ctx.moveTo(layout.cameraX + doorwayHalf, roomBottom);
     ctx.lineTo(roomRight, roomBottom);
-    ctx.stroke();
-
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.7)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(layout.cameraX - doorwayHalf, roomBottom);
-    ctx.quadraticCurveTo(layout.cameraX, roomBottom - doorwayHalf * 0.5, layout.cameraX + doorwayHalf, roomBottom);
-    ctx.stroke();
-
-    ctx.fillStyle = "#0f172a";
-    ctx.beginPath();
-    ctx.arc(layout.cameraX, layout.cameraY, 7, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(148, 163, 184, 0.45)";
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(layout.cameraX, layout.cameraY - 5);
-    ctx.lineTo(layout.visibleZone[2].x, layout.visibleZone[2].y);
-    ctx.moveTo(layout.cameraX, layout.cameraY - 5);
-    ctx.lineTo(layout.visibleZone[3].x, layout.visibleZone[3].y);
     ctx.stroke();
 
     for (const item of furnitureItems) {
@@ -277,20 +244,17 @@
     if (showLabels) {
       ctx.fillStyle = "rgba(17, 24, 39, 0.92)";
       ctx.font = '600 16px "Geist Sans", sans-serif';
-      ctx.fillText("Far side", roomRight - 72, roomTop - 10);
-      ctx.fillText("Near camera", roomRight - 108, roomBottom + 28);
+      ctx.fillText("Top-down floor plan", planeX, 18);
 
       ctx.font = '500 13px "Geist Mono", monospace';
       ctx.fillStyle = "rgba(71, 85, 105, 0.9)";
       ctx.fillText(`room ${roomWidthUnits.toFixed(1)} x ${roomHeightUnits.toFixed(1)}`, roomLeft, height - 12);
-      ctx.fillText("camera", layout.cameraX - 24, layout.cameraY + 20);
       if (showStats) {
-        ctx.fillText(`live ${currentCount} people`, planeX, 18);
-        ctx.fillText(`elapsed ${formatSeconds(elapsedSeconds)}`, planeX + 150, 18);
-        ctx.fillText(`max ${Math.round(maxValue)}`, planeX + 310, 18);
+        ctx.fillText(`live ${currentCount} people`, planeX + 180, 18);
+        ctx.fillText(`elapsed ${formatSeconds(elapsedSeconds)}`, planeX + 330, 18);
+        ctx.fillText(`max ${Math.round(maxValue)}`, planeX + 490, 18);
       } else {
-        ctx.fillText("top-down room plan", planeX, 18);
-        ctx.fillText(`guide depth ${projection.floor_top_y_ratio.toFixed(2)}`, planeX + 180, 18);
+        ctx.fillText(`projection depth ${projection.floor_top_y_ratio.toFixed(2)}`, planeX + 180, 18);
       }
     }
   }

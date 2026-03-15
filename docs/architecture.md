@@ -111,6 +111,10 @@ app/heatmap.py -> cv2 / numpy / filesystem
 
 - `localStorage` 読み書き
 
+## 関連ドキュメント
+
+- [workflow-and-architecture.md](./workflow-and-architecture.md) … プロダクトの動く仕組み・ワークフロー・セッションライフサイクル・床面射影を Mermaid 図で解説
+
 ## Next Step
 
 - API schema が増えたら `pydantic` の request/response model を追加する

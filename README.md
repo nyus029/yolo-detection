@@ -77,6 +77,11 @@ ipconfig getifaddr en1
 - `POST /detect`
   - multipart: `file`, `session_id`（任意）
 
+## ドキュメント
+
+- **[docs/workflow-and-architecture.md](docs/workflow-and-architecture.md)** … プロダクトの動く仕組み・ワークフロー・セッション・床面射影を図解（Mermaid）で解説
+- [docs/architecture.md](docs/architecture.md) … モジュール構成・責務・依存の向き
+
 ## フロントエンド構成
 
 - `frontend/`: Svelte + TypeScript + Vite のソースコード

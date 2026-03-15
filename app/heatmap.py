@@ -83,37 +83,105 @@ class FurnitureItem:
         }
 
 
+def finalize_furniture_items(items: list[dict[str, Any]], min_support: int = 2) -> list[FurnitureItem]:
+    merged_tables: list[dict[str, Any]] = []
+    finalized: list[FurnitureItem] = []
+
+    for item in items:
+        support = int(item["support"])
+        if support < min_support:
+            continue
+
+        if str(item["kind"]) != "table":
+            finalized.append(
+                FurnitureItem(
+                    kind=str(item["kind"]),
+                    x=float(item["x"]),
+                    y=float(item["y"]),
+                    width=float(item["width"]),
+                    height=float(item["height"]),
+                    confidence=float(item["confidence"]),
+                    support=support,
+                )
+            )
+            continue
+
+        merged = False
+        current_x = float(item["x"])
+        current_y = float(item["y"])
+        current_width = float(item["width"])
+        current_height = float(item["height"])
+        current_confidence = float(item["confidence"])
+
+        for cluster in merged_tables:
+            x_gap = abs(float(cluster["x"]) - current_x)
+            y_gap = abs(float(cluster["y"]) - current_y)
+            avg_width = (float(cluster["width"]) + current_width) * 0.5
+            vertical_span = (float(cluster["height"]) + current_height) * 0.5
+            if x_gap > max(0.08, avg_width * 0.75):
+                continue
+            if y_gap > max(0.22, vertical_span * 1.9):
+                continue
+
+            top = min(float(cluster["y"]) - float(cluster["height"]) * 0.5, current_y - current_height * 0.5)
+            bottom = max(float(cluster["y"]) + float(cluster["height"]) * 0.5, current_y + current_height * 0.5)
+            cluster_support = int(cluster["support"]) + support
+            alpha = support / max(1, cluster_support)
+            cluster["x"] = float(float(cluster["x"]) * (1.0 - alpha) + current_x * alpha)
+            cluster["y"] = float((top + bottom) * 0.5)
+            cluster["width"] = float(clamp(max(float(cluster["width"]), current_width, avg_width * 0.95), 0.1, 0.34))
+            cluster["height"] = float(clamp(bottom - top, 0.1, 0.55))
+            cluster["confidence"] = max(float(cluster["confidence"]), current_confidence)
+            cluster["support"] = cluster_support
+            merged = True
+            break
+
+        if not merged:
+            merged_tables.append(
+                {
+                    "kind": "table",
+                    "x": current_x,
+                    "y": current_y,
+                    "width": current_width,
+                    "height": current_height,
+                    "confidence": current_confidence,
+                    "support": support,
+                }
+            )
+
+    finalized.extend(
+        FurnitureItem(
+            kind="table",
+            x=float(item["x"]),
+            y=float(item["y"]),
+            width=float(item["width"]),
+            height=float(item["height"]),
+            confidence=float(item["confidence"]),
+            support=int(item["support"]),
+        )
+        for item in merged_tables
+    )
+    return finalized
+
+
 def room_layout_metrics(
     width: int,
     height: int,
     projection: ProjectionConfig,
 ) -> dict[str, Any]:
     outer_padding = max(14, int(min(width, height) * 0.04))
-    room_x = outer_padding
-    room_y = outer_padding
-    room_width = max(120, width - outer_padding * 2)
-    room_height = max(120, height - outer_padding * 2)
+    available_width = max(120, width - outer_padding * 2)
+    available_height = max(120, height - outer_padding * 2)
+    room_ratio = projection.room_width_units / max(1.0, projection.room_height_units)
+    if available_width / max(1.0, available_height) > room_ratio:
+        room_height = available_height
+        room_width = max(120, int(round(room_height * room_ratio)))
+    else:
+        room_width = available_width
+        room_height = max(120, int(round(room_width / max(1e-6, room_ratio))))
+    room_x = outer_padding + max(0, (available_width - room_width) // 2)
+    room_y = outer_padding + max(0, (available_height - room_height) // 2)
     wall_thickness = int(clamp(min(room_width, room_height) * 0.035, 8, 18))
-
-    top_width = room_width * clamp(projection.floor_top_width_ratio, 0.08, 1.0)
-    bottom_width = room_width * clamp(projection.floor_bottom_width_ratio, 0.08, 1.0)
-    top_inset = int(round((room_width - top_width) / 2.0))
-    bottom_inset = int(round((room_width - bottom_width) / 2.0))
-    top_y = int(round(room_y + room_height * clamp(0.08 + projection.floor_top_y_ratio * 0.42, 0.1, 0.5)))
-    bottom_y = int(round(room_y + room_height - wall_thickness * 1.4))
-    door_width = int(clamp(room_width * 0.2, 36, 96))
-    camera_x = int(round(room_x + room_width / 2.0))
-    camera_y = int(round(room_y + room_height + wall_thickness * 2.0))
-
-    visible_zone = np.array(
-        [
-            [room_x + top_inset, top_y],
-            [room_x + room_width - top_inset, top_y],
-            [room_x + room_width - bottom_inset, bottom_y],
-            [room_x + bottom_inset, bottom_y],
-        ],
-        dtype=np.int32,
-    )
 
     return {
         "room_x": room_x,
@@ -121,10 +189,6 @@ def room_layout_metrics(
         "room_width": room_width,
         "room_height": room_height,
         "wall_thickness": wall_thickness,
-        "visible_zone": visible_zone,
-        "door_width": door_width,
-        "camera_x": camera_x,
-        "camera_y": camera_y,
     }
 
 
@@ -142,8 +206,6 @@ def draw_room_plan(
     wall_thickness = layout["wall_thickness"]
     room_right = room_x + room_width
     room_bottom = room_y + room_height
-    door_half = layout["door_width"] // 2
-    visible_zone = layout["visible_zone"]
 
     cv2.rectangle(
         canvas,
@@ -172,29 +234,11 @@ def draw_room_plan(
         overlay = canvas[room_y:room_bottom, room_x:room_right].copy()
         canvas[room_y:room_bottom, room_x:room_right] = cv2.addWeighted(overlay, 0.5, colored, 0.5, 0.0)
 
-    cv2.polylines(canvas, [visible_zone], True, (186, 194, 206), 1, cv2.LINE_AA)
-
     wall_color = (63, 63, 70)
     cv2.line(canvas, (room_x, room_y), (room_right, room_y), wall_color, wall_thickness, cv2.LINE_AA)
     cv2.line(canvas, (room_x, room_y), (room_x, room_bottom), wall_color, wall_thickness, cv2.LINE_AA)
     cv2.line(canvas, (room_right, room_y), (room_right, room_bottom), wall_color, wall_thickness, cv2.LINE_AA)
-    cv2.line(canvas, (room_x, room_bottom), (layout["camera_x"] - door_half, room_bottom), wall_color, wall_thickness, cv2.LINE_AA)
-    cv2.line(canvas, (layout["camera_x"] + door_half, room_bottom), (room_right, room_bottom), wall_color, wall_thickness, cv2.LINE_AA)
-
-    cv2.ellipse(
-        canvas,
-        (layout["camera_x"], room_bottom),
-        (door_half, max(8, int(door_half * 0.55))),
-        0,
-        180,
-        360,
-        (255, 255, 255),
-        2,
-        cv2.LINE_AA,
-    )
-    cv2.circle(canvas, (layout["camera_x"], layout["camera_y"]), 7, (15, 23, 42), -1, cv2.LINE_AA)
-    cv2.line(canvas, (layout["camera_x"], layout["camera_y"] - 5), tuple(visible_zone[2]), (200, 206, 216), 1, cv2.LINE_AA)
-    cv2.line(canvas, (layout["camera_x"], layout["camera_y"] - 5), tuple(visible_zone[3]), (200, 206, 216), 1, cv2.LINE_AA)
+    cv2.line(canvas, (room_x, room_bottom), (room_right, room_bottom), wall_color, wall_thickness, cv2.LINE_AA)
 
     if furniture_items:
         draw_furniture_plan(canvas, projection, furniture_items)
@@ -278,6 +322,31 @@ def clamp_bbox(value: float, maximum: int) -> float:
     return clamp(value, 0.0, float(maximum - 1))
 
 
+def project_point_to_plane(
+    projection: ProjectionConfig,
+    x_ratio: float,
+    y_ratio: float,
+) -> tuple[float, float] | None:
+    clamped_x = clamp(x_ratio, 0.0, 1.0)
+    clamped_y = clamp(y_ratio, 0.0, 1.0)
+    top_y = projection.floor_top_y_ratio
+    if clamped_y < top_y:
+        return None
+
+    depth_ratio = (clamped_y - top_y) / max(1e-6, 1.0 - top_y)
+    visible_width = projection.floor_top_width_ratio + (
+        projection.floor_bottom_width_ratio - projection.floor_top_width_ratio
+    ) * depth_ratio
+    if visible_width <= 0:
+        return None
+
+    plane_x = ((clamped_x - 0.5) / visible_width) + 0.5
+    if plane_x < -0.2 or plane_x > 1.2:
+        return None
+
+    return clamp(plane_x, 0.0, 1.0), clamp(depth_ratio, 0.0, 1.0)
+
+
 def snap_furniture_to_room(kind: str, plane_x: float, plane_y: float) -> tuple[float, float]:
     if kind == "tv":
         return plane_x, 0.08
@@ -286,6 +355,71 @@ def snap_furniture_to_room(kind: str, plane_x: float, plane_y: float) -> tuple[f
     if kind == "plant":
         return clamp(plane_x, 0.1, 0.9), clamp(plane_y, 0.12, 0.88)
     return plane_x, plane_y
+
+
+def estimate_furniture_footprint(
+    projection: ProjectionConfig,
+    kind: str,
+    bbox: list[float] | tuple[float, float, float, float],
+    frame_width: int,
+    frame_height: int,
+    projected_width: float,
+    bbox_width_ratio: float,
+    bbox_height_ratio: float,
+) -> tuple[float, float]:
+    width_ratio = clamp(projected_width * 1.05, 0.05, 0.35)
+    height_ratio = clamp(bbox_height_ratio * 0.85, 0.05, 0.3)
+
+    if kind in {"tv", "plant"}:
+        return width_ratio, height_ratio * 0.8
+
+    if kind == "chair":
+        return (
+            clamp(width_ratio * 0.72, 0.04, 0.16),
+            clamp(height_ratio * 0.72, 0.04, 0.16),
+        )
+
+    if kind == "table":
+        x1, y1, x2, y2 = bbox
+        plane_bottom_left = project_point_to_plane(projection, x1 / max(1.0, frame_width), y2 / max(1.0, frame_height))
+        plane_bottom_right = project_point_to_plane(projection, x2 / max(1.0, frame_width), y2 / max(1.0, frame_height))
+        sampled_top_y = max(float(y1), projection.floor_top_y_ratio * frame_height)
+        plane_top_center = project_point_to_plane(
+            projection,
+            ((x1 + x2) * 0.5) / max(1.0, frame_width),
+            sampled_top_y / max(1.0, frame_height),
+        )
+        plane_bottom_center = project_point_to_plane(
+            projection,
+            ((x1 + x2) * 0.5) / max(1.0, frame_width),
+            y2 / max(1.0, frame_height),
+        )
+
+        plane_span_x = width_ratio
+        plane_span_y = height_ratio
+        if plane_bottom_left and plane_bottom_right:
+            plane_span_x = clamp(abs(plane_bottom_right[0] - plane_bottom_left[0]), 0.05, 0.35)
+        if plane_top_center and plane_bottom_center:
+            plane_span_y = clamp(abs(plane_bottom_center[1] - plane_top_center[1]), 0.05, 0.35)
+
+        base_width = clamp(max(width_ratio * 1.05, plane_span_x * 1.15), 0.09, 0.3)
+        base_height = clamp(max(height_ratio * 0.8, plane_span_y * 1.1), 0.07, 0.3)
+        plane_aspect_ratio = plane_span_x / max(1e-6, plane_span_y)
+
+        if plane_aspect_ratio >= 1.18:
+            long_side = clamp(max(base_width, base_height * 1.35), 0.11, 0.32)
+            short_side = clamp(min(base_height, long_side * 0.74), 0.07, 0.18)
+            return long_side, short_side
+
+        if plane_aspect_ratio <= 0.85:
+            long_side = clamp(max(base_height, base_width * 1.35), 0.11, 0.32)
+            short_side = clamp(min(base_width, long_side * 0.74), 0.07, 0.18)
+            return short_side, long_side
+
+        square_side = clamp((base_width + base_height) * 0.5, 0.08, 0.22)
+        return square_side, square_side
+
+    return width_ratio, height_ratio
 
 
 def project_furniture_detections(
@@ -311,32 +445,25 @@ def project_furniture_detections(
             projected["x"],
             projected["y"],
         )
-        width_ratio = clamp(projected["width"] * 1.05, 0.05, 0.35)
-        height_ratio = clamp(((y2 - y1) / max(1.0, frame_height)) * 0.85, 0.05, 0.3)
         kind = str(detection.get("furniture_type") or detection.get("class_name") or "object")
-
-        if kind in {"tv", "plant"}:
-            height_ratio *= 0.8
-        if kind == "chair":
-            width_ratio = clamp(width_ratio * 0.72, 0.04, 0.16)
-            height_ratio = clamp(height_ratio * 0.72, 0.04, 0.16)
-        if kind == "table":
-            width_ratio = clamp(width_ratio * 1.2, 0.09, 0.28)
-            height_ratio = clamp(height_ratio * 0.9, 0.07, 0.2)
+        bbox_width_ratio = (x2 - x1) / max(1.0, frame_width)
+        bbox_height_ratio = (y2 - y1) / max(1.0, frame_height)
+        width_ratio, height_ratio = estimate_furniture_footprint(
+            projection,
+            kind,
+            detection["bbox"],
+            frame_width,
+            frame_height,
+            projected["width"],
+            bbox_width_ratio,
+            bbox_height_ratio,
+        )
 
         temp_session.merge_furniture_detection(kind, plane_x, plane_y, width_ratio, height_ratio, float(detection.get("score", 0.0)))
 
     return [
-        FurnitureItem(
-            kind=str(item["kind"]),
-            x=float(item["x"]),
-            y=float(item["y"]),
-            width=float(item["width"]),
-            height=float(item["height"]),
-            confidence=float(item["confidence"]),
-            support=int(item["support"]),
-        )
-        for item in temp_session.furniture_observations
+        item
+        for item in finalize_furniture_items(temp_session.furniture_observations, min_support=1)
     ]
 
 
@@ -347,33 +474,17 @@ def project_detection_to_plane(
     frame_height: int,
 ) -> dict[str, float] | None:
     x1, y1, x2, y2 = bbox
-    top_y = projection.floor_top_y_ratio
-    bottom_y_ratio = clamp(y2 / max(1, frame_height), 0.0, 1.0)
-    if bottom_y_ratio < top_y:
-        return None
+    plane_center = project_point_to_plane(projection, ((x1 + x2) * 0.5) / max(1.0, frame_width), y2 / max(1.0, frame_height))
+    plane_left = project_point_to_plane(projection, x1 / max(1.0, frame_width), y2 / max(1.0, frame_height))
+    plane_right = project_point_to_plane(projection, x2 / max(1.0, frame_width), y2 / max(1.0, frame_height))
 
-    depth_ratio = (bottom_y_ratio - top_y) / max(1e-6, 1.0 - top_y)
-    visible_width = projection.floor_top_width_ratio + (
-        projection.floor_bottom_width_ratio - projection.floor_top_width_ratio
-    ) * depth_ratio
-    if visible_width <= 0:
-        return None
-
-    left_ratio = clamp(x1 / max(1, frame_width), 0.0, 1.0)
-    right_ratio = clamp(x2 / max(1, frame_width), 0.0, 1.0)
-    center_ratio = clamp(((x1 + x2) * 0.5) / max(1, frame_width), 0.0, 1.0)
-
-    plane_left = clamp(((left_ratio - 0.5) / visible_width) + 0.5, 0.0, 1.0)
-    plane_right = clamp(((right_ratio - 0.5) / visible_width) + 0.5, 0.0, 1.0)
-    plane_center = clamp(((center_ratio - 0.5) / visible_width) + 0.5, 0.0, 1.0)
-
-    if plane_center < -0.2 or plane_center > 1.2:
+    if plane_center is None or plane_left is None or plane_right is None:
         return None
 
     return {
-        "x": plane_center,
-        "y": clamp(depth_ratio, 0.0, 1.0),
-        "width": clamp(abs(plane_right - plane_left), 0.02, 0.9),
+        "x": plane_center[0],
+        "y": plane_center[1],
+        "width": clamp(abs(plane_right[0] - plane_left[0]), 0.02, 0.9),
     }
 
 
@@ -423,26 +534,11 @@ class HeatmapSession:
         frame_width: int,
         frame_height: int,
     ) -> tuple[float, float] | None:
-        x_ratio = clamp(foot_x / frame_width, 0.0, 1.0)
-        y_ratio = clamp(foot_y / frame_height, 0.0, 1.0)
-        top_y = self.projection.floor_top_y_ratio
-        if y_ratio < top_y:
-            return None
-
-        depth_ratio = (y_ratio - top_y) / max(1e-6, 1.0 - top_y)
-        visible_width = self.projection.floor_top_width_ratio + (
-            self.projection.floor_bottom_width_ratio - self.projection.floor_top_width_ratio
-        ) * depth_ratio
-        if visible_width <= 0:
-            return None
-
-        plane_x = ((x_ratio - 0.5) / visible_width) + 0.5
-        if plane_x < -0.2 or plane_x > 1.2:
-            return None
-
-        plane_x = clamp(plane_x, 0.0, 1.0)
-        plane_y = clamp(depth_ratio, 0.0, 1.0)
-        return plane_x, plane_y
+        return project_point_to_plane(
+            self.projection,
+            foot_x / max(1.0, frame_width),
+            foot_y / max(1.0, frame_height),
+        )
 
     def merge_furniture_detection(
         self,
@@ -487,19 +583,7 @@ class HeatmapSession:
             existing["confidence"] = max(float(existing["confidence"]), score)
             existing["support"] = support
 
-        self.furniture_items = [
-            FurnitureItem(
-                kind=str(item["kind"]),
-                x=float(item["x"]),
-                y=float(item["y"]),
-                width=float(item["width"]),
-                height=float(item["height"]),
-                confidence=float(item["confidence"]),
-                support=int(item["support"]),
-            )
-            for item in self.furniture_observations
-            if int(item["support"]) >= 2
-        ]
+        self.furniture_items = finalize_furniture_items(self.furniture_observations, min_support=2)
 
     def add_frame(
         self,
@@ -536,17 +620,18 @@ class HeatmapSession:
 
                 kind = str(detection.get("furniture_type") or detection.get("class_name") or "object")
                 plane_x, plane_y = snap_furniture_to_room(kind, projected["x"], projected["y"])
-                width_ratio = clamp(projected["width"] * 1.05, 0.05, 0.35)
-                height_ratio = clamp(((y2 - y1) / max(1.0, frame_height)) * 0.85, 0.05, 0.3)
-
-                if kind in {"tv", "plant"}:
-                    height_ratio *= 0.8
-                if kind == "chair":
-                    width_ratio = clamp(width_ratio * 0.72, 0.04, 0.16)
-                    height_ratio = clamp(height_ratio * 0.72, 0.04, 0.16)
-                if kind == "table":
-                    width_ratio = clamp(width_ratio * 1.2, 0.09, 0.28)
-                    height_ratio = clamp(height_ratio * 0.9, 0.07, 0.2)
+                bbox_width_ratio = (x2 - x1) / max(1.0, frame_width)
+                bbox_height_ratio = (y2 - y1) / max(1.0, frame_height)
+                width_ratio, height_ratio = estimate_furniture_footprint(
+                    self.projection,
+                    kind,
+                    detection["bbox"],
+                    frame_width,
+                    frame_height,
+                    projected["width"],
+                    bbox_width_ratio,
+                    bbox_height_ratio,
+                )
 
                 self.merge_furniture_detection(kind, plane_x, plane_y, width_ratio, height_ratio, float(detection.get("score", 0.0)))
 
@@ -661,37 +746,6 @@ class HeatmapSession:
             2,
             cv2.LINE_AA,
         )
-        cv2.putText(
-            canvas,
-            "Far side",
-            (margin_left + plane_width - 118, margin_top - 18),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            (60, 60, 60),
-            1,
-            cv2.LINE_AA,
-        )
-        cv2.putText(
-            canvas,
-            "Near camera",
-            (margin_left + plane_width - 145, margin_top + plane_height + 28),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            (60, 60, 60),
-            1,
-            cv2.LINE_AA,
-        )
-        cv2.putText(
-            canvas,
-            "camera",
-            (margin_left + plane_width // 2 - 24, margin_top + plane_height + 54),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.52,
-            (71, 85, 105),
-            1,
-            cv2.LINE_AA,
-        )
-
         legend_x = canvas_width - 48
         legend_top = margin_top
         legend_bottom = margin_top + plane_height
