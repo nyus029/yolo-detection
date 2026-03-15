@@ -1,4 +1,4 @@
-import type { DetectResponse, EstimateStructureResponse, HeatmapData, SessionStatus, StartSessionInput } from "./types";
+import type { DetectResponse, EstimateFurnitureResponse, EstimateStructureResponse, HeatmapData, SessionStatus, StartSessionInput } from "./types";
 
 export async function fetchHeatmapDataUrl(sessionId: string | null): Promise<string | null> {
   if (!sessionId) return null;
@@ -53,6 +53,26 @@ export async function estimateStructure(blob: Blob): Promise<EstimateStructureRe
   }
 
   return res.json() as Promise<EstimateStructureResponse>;
+}
+
+export async function estimateFurniture(
+  blob: Blob,
+  settings: Pick<StartSessionInput, "roomWidthUnits" | "roomHeightUnits" | "floorTopYRatio" | "floorTopWidthRatio" | "floorBottomWidthRatio">,
+): Promise<EstimateFurnitureResponse> {
+  const form = new FormData();
+  form.append("file", blob, "furniture.jpg");
+  form.append("room_width_units", String(settings.roomWidthUnits));
+  form.append("room_height_units", String(settings.roomHeightUnits));
+  form.append("floor_top_y_ratio", String(settings.floorTopYRatio));
+  form.append("floor_top_width_ratio", String(settings.floorTopWidthRatio));
+  form.append("floor_bottom_width_ratio", String(settings.floorBottomWidthRatio));
+
+  const res = await fetch("/estimate-furniture", { method: "POST", body: form });
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`);
+  }
+
+  return res.json() as Promise<EstimateFurnitureResponse>;
 }
 
 export async function startSession(settings: StartSessionInput): Promise<SessionStatus> {

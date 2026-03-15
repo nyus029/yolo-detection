@@ -3,6 +3,7 @@
 
   import { getHeatmapColor, type HeatmapScheme } from "./heatmapColors";
   import { computeRoomLayout, type RoomProjectionGuide } from "./roomLayout";
+  import type { FurnitureItem } from "./types";
 
   let {
     grid = [],
@@ -20,6 +21,7 @@
       floor_top_width_ratio: 0.38,
       floor_bottom_width_ratio: 1.0,
     },
+    furnitureItems = [],
     showStats = true,
   }: {
     grid?: number[][];
@@ -33,6 +35,7 @@
     currentCount?: number;
     elapsedSeconds?: number;
     projection?: RoomProjectionGuide;
+    furnitureItems?: FurnitureItem[];
     showStats?: boolean;
   } = $props();
 
@@ -133,7 +136,7 @@
         ctx.drawImage(source, roomLeft, roomTop, layout.roomWidth, layout.roomHeight);
 
         ctx.globalCompositeOperation = "multiply";
-        ctx.fillStyle = "rgba(255, 153, 0, 0.06)";
+        ctx.fillStyle = "rgba(255, 186, 8, 0.04)";
         ctx.fillRect(roomLeft, roomTop, layout.roomWidth, layout.roomHeight);
         ctx.globalCompositeOperation = "source-over";
       }
@@ -164,17 +167,8 @@
       ctx.restore();
     }
 
-    ctx.fillStyle = "rgba(148, 163, 184, 0.15)";
-    ctx.beginPath();
-    ctx.moveTo(layout.visibleZone[0].x, layout.visibleZone[0].y);
-    for (let index = 1; index < layout.visibleZone.length; index += 1) {
-      ctx.lineTo(layout.visibleZone[index].x, layout.visibleZone[index].y);
-    }
-    ctx.closePath();
-    ctx.fill();
-
-    ctx.strokeStyle = "rgba(30, 41, 59, 0.18)";
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = "rgba(148, 163, 184, 0.5)";
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(layout.visibleZone[0].x, layout.visibleZone[0].y);
     for (let index = 1; index < layout.visibleZone.length; index += 1) {
@@ -199,7 +193,7 @@
     ctx.lineTo(roomRight, roomBottom);
     ctx.stroke();
 
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.7)";
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(layout.cameraX - doorwayHalf, roomBottom);
@@ -210,7 +204,7 @@
     ctx.beginPath();
     ctx.arc(layout.cameraX, layout.cameraY, 7, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = "rgba(15, 23, 42, 0.2)";
+    ctx.strokeStyle = "rgba(148, 163, 184, 0.45)";
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(layout.cameraX, layout.cameraY - 5);
@@ -218,6 +212,67 @@
     ctx.moveTo(layout.cameraX, layout.cameraY - 5);
     ctx.lineTo(layout.visibleZone[3].x, layout.visibleZone[3].y);
     ctx.stroke();
+
+    for (const item of furnitureItems) {
+      const centerX = roomLeft + item.x * layout.roomWidth;
+      const centerY = roomTop + item.y * layout.roomHeight;
+      const drawWidth = Math.max(12, item.width * layout.roomWidth);
+      const drawHeight = Math.max(12, item.height * layout.roomHeight);
+
+      if (item.kind === "table") {
+        ctx.fillStyle = "#ad7f51";
+        ctx.strokeStyle = "#6f4e37";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.rect(centerX - drawWidth / 2, centerY - drawHeight / 2, drawWidth, drawHeight);
+        ctx.fill();
+        ctx.stroke();
+      } else if (item.kind === "chair") {
+        const radius = Math.max(8, Math.min(drawWidth, drawHeight) / 2);
+        ctx.fillStyle = "#5e81ac";
+        ctx.strokeStyle = "#345379";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      } else if (item.kind === "sofa") {
+        ctx.fillStyle = "#829b7e";
+        ctx.strokeStyle = "#566c52";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.rect(centerX - drawWidth / 2, centerY - drawHeight / 2, drawWidth, drawHeight);
+        ctx.fill();
+        ctx.stroke();
+        ctx.strokeStyle = "#c5d1c1";
+        ctx.strokeRect(centerX - drawWidth / 2 + 4, centerY - drawHeight / 2 + 4, drawWidth - 8, drawHeight - 8);
+      } else if (item.kind === "tv") {
+        ctx.fillStyle = "#3a4554";
+        ctx.strokeStyle = "#111827";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.rect(centerX - drawWidth / 2, centerY - drawHeight / 2, drawWidth, drawHeight);
+        ctx.fill();
+        ctx.stroke();
+      } else if (item.kind === "plant") {
+        ctx.fillStyle = "#4c915e";
+        ctx.beginPath();
+        ctx.ellipse(centerX, centerY - drawHeight * 0.1, drawWidth * 0.35, drawHeight * 0.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#a26842";
+        ctx.fillRect(centerX - drawWidth * 0.22, centerY + drawHeight * 0.1, drawWidth * 0.44, drawHeight * 0.24);
+      } else if (item.kind === "bed") {
+        ctx.fillStyle = "#e5e7eb";
+        ctx.strokeStyle = "#94a3b8";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.rect(centerX - drawWidth / 2, centerY - drawHeight / 2, drawWidth, drawHeight);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = "#f8fafc";
+        ctx.fillRect(centerX - drawWidth / 2 + 4, centerY - drawHeight / 2 + 4, drawWidth - 8, Math.max(8, drawHeight * 0.22));
+      }
+    }
 
     if (showLabels) {
       ctx.fillStyle = "rgba(17, 24, 39, 0.92)";
@@ -234,8 +289,8 @@
         ctx.fillText(`elapsed ${formatSeconds(elapsedSeconds)}`, planeX + 150, 18);
         ctx.fillText(`max ${Math.round(maxValue)}`, planeX + 310, 18);
       } else {
-        ctx.fillText(`visible top ${projection.floor_top_width_ratio.toFixed(2)}`, planeX, 18);
-        ctx.fillText(`floor start ${projection.floor_top_y_ratio.toFixed(2)}`, planeX + 170, 18);
+        ctx.fillText("top-down room plan", planeX, 18);
+        ctx.fillText(`guide depth ${projection.floor_top_y_ratio.toFixed(2)}`, planeX + 180, 18);
       }
     }
   }
@@ -265,6 +320,7 @@
     currentCount;
     elapsedSeconds;
     projection;
+    furnitureItems;
     showStats;
     draw();
   });

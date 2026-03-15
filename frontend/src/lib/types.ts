@@ -13,6 +13,16 @@ export type Projection = {
   floor_bottom_width_ratio: number;
 };
 
+export type FurnitureItem = {
+  kind: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  confidence: number;
+  support: number;
+};
+
 export type SessionStatus = {
   session_id: string;
   started_at: string;
@@ -31,6 +41,7 @@ export type SessionStatus = {
   saved_heatmap_path: string | null;
   saved_metadata_path: string | null;
   projection: Projection;
+  furniture_items: FurnitureItem[];
 };
 
 export type HeatmapData = {
@@ -44,12 +55,14 @@ export type HeatmapData = {
   room_height_units: number;
   is_active: boolean;
   projection: Projection;
+  furniture_items: FurnitureItem[];
 };
 
 export type DetectResponse = {
   detections: Detection[];
   counts: {
     person: number;
+    furniture?: number;
   };
   session?: SessionStatus | null;
   message?: string;
@@ -61,6 +74,12 @@ export type EstimateStructureResponse = {
   frame_width: number;
   frame_height: number;
   message: string;
+};
+
+export type EstimateFurnitureResponse = {
+  furniture_items: FurnitureItem[];
+  count: number;
+  raw_count: number;
 };
 
 export type StartSessionInput = {

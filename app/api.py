@@ -8,7 +8,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response
 
 from app.detection import YOLOPersonDetector
-from app.heatmap import ProjectionConfig, SessionStore
+from app.heatmap import ProjectionConfig, SessionStore, project_furniture_detections
 from app.structure import estimate_projection_from_frame
 
 
@@ -25,6 +25,31 @@ def register_routes(app: FastAPI, detector: YOLOPersonDetector, session_store: S
     async def estimate_structure(file: UploadFile = File(...)) -> dict[str, Any]:
         frame = await decode_upload(file)
         return estimate_projection_from_frame(frame)
+
+    @app.post("/estimate-furniture")
+    async def estimate_furniture(
+        file: UploadFile = File(...),
+        room_width_units: float = Form(default=10.0),
+        room_height_units: float = Form(default=10.0),
+        floor_top_y_ratio: float = Form(default=0.35),
+        floor_top_width_ratio: float = Form(default=0.38),
+        floor_bottom_width_ratio: float = Form(default=1.0),
+    ) -> dict[str, Any]:
+        frame = await decode_upload(file)
+        projection = ProjectionConfig(
+            room_width_units=room_width_units,
+            room_height_units=room_height_units,
+            floor_top_y_ratio=floor_top_y_ratio,
+            floor_top_width_ratio=floor_top_width_ratio,
+            floor_bottom_width_ratio=floor_bottom_width_ratio,
+        ).normalized()
+        _, furniture_detections, counts = detector.detect_scene(frame)
+        furniture_items = project_furniture_detections(projection, furniture_detections, frame.shape[1], frame.shape[0])
+        return {
+            "furniture_items": [item.to_payload() for item in furniture_items],
+            "count": len(furniture_items),
+            "raw_count": counts.get("furniture", 0),
+        }
 
     @app.post("/session/start")
     def start_session(
@@ -94,10 +119,10 @@ def register_routes(app: FastAPI, detector: YOLOPersonDetector, session_store: S
     ) -> dict[str, Any]:
         frame = await decode_upload(file, allow_invalid=True)
         if frame is None:
-            return {"detections": [], "counts": {"person": 0}, "message": "invalid image"}
+            return {"detections": [], "counts": {"person": 0, "furniture": 0}, "message": "invalid image"}
 
-        detections, counts = detector.detect_people(frame)
-        session_status_payload = update_session(session_store, session_id, frame, detections)
+        detections, furniture_detections, counts = detector.detect_scene(frame)
+        session_status_payload = update_session(session_store, session_id, frame, detections, furniture_detections)
         return {"detections": detections, "counts": counts, "session": session_status_payload}
 
 
@@ -117,6 +142,7 @@ def update_session(
     session_id: str | None,
     frame: np.ndarray,
     detections: list[dict[str, Any]],
+    furniture_detections: list[dict[str, Any]],
 ) -> dict[str, Any] | None:
     if not session_id:
         return None
@@ -128,6 +154,6 @@ def update_session(
     if not session.is_active:
         session = session_store.stop_and_persist(session_id)
     else:
-        session.add_frame(frame, detections)
+        session.add_frame(frame, detections, furniture_detections)
 
     return session.to_status()

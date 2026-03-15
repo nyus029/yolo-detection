@@ -3,12 +3,12 @@
 
   import ColorBar from "./lib/ColorBar.svelte";
   import HeatmapCanvas from "./lib/HeatmapCanvas.svelte";
-  import { detectFrame, estimateStructure, fetchHeatmapDataUrl, startSession, stopSession } from "./lib/api-client";
+  import { detectFrame, estimateFurniture, estimateStructure, fetchHeatmapDataUrl, startSession, stopSession } from "./lib/api-client";
   import { createCameraController, type CameraController } from "./lib/camera";
   import { loadHistory, saveHistory } from "./lib/history";
   import { heatmapData } from "./lib/heatmapStore";
   import { setHeatmapData, startPolling, stopPolling } from "./lib/heatmapStore";
-  import type { Detection, HeatmapData, HistoryItem, Projection, SessionStatus } from "./lib/types";
+  import type { Detection, FurnitureItem, HeatmapData, HistoryItem, Projection, SessionStatus } from "./lib/types";
 
   let videoEl: HTMLVideoElement;
   let overlayEl: HTMLCanvasElement;
@@ -44,6 +44,7 @@
   let heatmapSrc = "";
   let historyItems: HistoryItem[] = [];
   let estimatedConfidence: number | null = null;
+  let previewFurnitureItems: FurnitureItem[] = [];
 
   let latestHeatmap: HeatmapData | null = null;
 
@@ -88,6 +89,37 @@
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
     return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+
+  function mergeFurnitureSnapshots(snapshots: FurnitureItem[][]): FurnitureItem[] {
+    const merged: FurnitureItem[] = [];
+
+    for (const snapshot of snapshots) {
+      for (const item of snapshot) {
+        const match = merged.find(
+          (candidate) =>
+            candidate.kind === item.kind &&
+            Math.abs(candidate.x - item.x) + Math.abs(candidate.y - item.y) < 0.18,
+        );
+
+        if (!match) {
+          merged.push({ ...item });
+          continue;
+        }
+
+        const support = (match.support || 1) + 1;
+        match.x = (match.x * (support - 1) + item.x) / support;
+        match.y = (match.y * (support - 1) + item.y) / support;
+        match.width = (match.width * (support - 1) + item.width) / support;
+        match.height = (match.height * (support - 1) + item.height) / support;
+        match.confidence = Math.max(match.confidence, item.confidence);
+        match.support = support;
+      }
+    }
+
+    return merged
+      .filter((item) => item.support >= 2)
+      .sort((left, right) => right.support - left.support || right.confidence - left.confidence);
   }
 
   function drawDetections(detections: Detection[], width: number, height: number): void {
@@ -220,7 +252,7 @@
           }
         }
 
-        statusText = `人物検出中: ${peopleCount}人 / 平面投影: ${data.session?.projected_points || 0}`;
+        statusText = `人物検出中: ${peopleCount}人 / 家具候補: ${data.session?.furniture_items?.length || 0} / 平面投影: ${data.session?.projected_points || 0}`;
       } catch (error) {
         statusText = `通信エラー: ${error}`;
       }
@@ -235,6 +267,7 @@
     cameraActive = true;
     structureEstimated = false;
     estimatedConfidence = null;
+    previewFurnitureItems = [];
     statusText = "カメラ起動済み。次に部屋の構造推定を実行してください。";
   }
 
@@ -250,8 +283,41 @@
     floorTopWidthRatio = data.projection.floor_top_width_ratio ?? floorTopWidthRatio;
     floorBottomWidthRatio = data.projection.floor_bottom_width_ratio ?? floorBottomWidthRatio;
     estimatedConfidence = data.confidence ?? null;
+    previewFurnitureItems = [];
     structureEstimated = true;
     statusText = `構造推定完了 (confidence=${data.confidence ?? "n/a"})。計測開始できます。`;
+  }
+
+  async function handleEstimateFurniturePreview(): Promise<void> {
+    if (!camera || !camera.hasStream()) {
+      throw new Error("先にカメラ起動を押してください");
+    }
+    if (!structureEstimated) {
+      throw new Error("先に部屋の構造推定を実行してください");
+    }
+
+    const snapshots: FurnitureItem[][] = [];
+    const sampleCount = 6;
+    for (let index = 0; index < sampleCount; index += 1) {
+      const blob = await camera.captureFrameBlob(0.82);
+      const data = await estimateFurniture(blob, {
+        roomWidthUnits: currentProjection.room_width_units,
+        roomHeightUnits: currentProjection.room_height_units,
+        floorTopYRatio: currentProjection.floor_top_y_ratio,
+        floorTopWidthRatio: currentProjection.floor_top_width_ratio,
+        floorBottomWidthRatio: currentProjection.floor_bottom_width_ratio,
+      });
+      snapshots.push(data.furniture_items || []);
+      if (index < sampleCount - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 120));
+      }
+    }
+
+    previewFurnitureItems = mergeFurnitureSnapshots(snapshots);
+    statusText =
+      previewFurnitureItems.length > 0
+        ? `家具推定完了: ${previewFurnitureItems.length}件のプレビューを作成しました`
+        : "家具推定完了: 安定した家具候補は見つかりませんでした";
   }
 
   async function handleStartMeasurement(): Promise<void> {
@@ -410,6 +476,13 @@
           statusText = `開始失敗: ${error}`;
         }
       }}>計測開始</button>
+      <button class="btn-secondary" type="button" disabled={!cameraActive || !structureEstimated || running} onclick={async () => {
+        try {
+          await handleEstimateFurniturePreview();
+        } catch (error) {
+          statusText = `家具推定失敗: ${error}`;
+        }
+      }}>家具推定</button>
       <button class="btn-danger" type="button" disabled={!running} onclick={() => void stopMeasurement("ユーザーが計測を停止しました")}>計測停止</button>
     </div>
   </section>
@@ -434,6 +507,7 @@
           roomWidthUnits={currentProjection.room_width_units}
           roomHeightUnits={currentProjection.room_height_units}
           projection={currentProjection}
+          furnitureItems={previewFurnitureItems}
         />
       </div>
     </section>
@@ -487,6 +561,7 @@
               currentCount={latestHeatmap.current_count}
               elapsedSeconds={latestHeatmap.elapsed_seconds}
               projection={latestHeatmap.projection}
+              furnitureItems={latestHeatmap.furniture_items}
             />
           {:else}
             <div class="heatmapEmpty">計測開始後にライブヒートマップを表示します。</div>
@@ -523,6 +598,7 @@
             currentCount={latestHeatmap.current_count}
             elapsedSeconds={latestHeatmap.elapsed_seconds}
             projection={latestHeatmap.projection}
+            furnitureItems={latestHeatmap.furniture_items}
           />
         </div>
         <div class="resultMeta">
