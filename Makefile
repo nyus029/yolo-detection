@@ -5,7 +5,7 @@ PIP ?= $(VENV)/bin/pip
 NPM ?= npm
 FRONTEND_DIR ?= frontend
 
-.PHONY: setup run dev clean frontend-build frontend-dev
+.PHONY: setup run dev clean frontend-build frontend-dev dev-all
 
 setup:
 	$(PYTHON) -m venv $(VENV)
@@ -22,6 +22,10 @@ frontend-dev:
 	cd $(FRONTEND_DIR) && $(NPM) run dev -- --host 0.0.0.0
 
 dev: run
+
+# フロントエンドとバックエンドを同時に起動
+dev-all:
+	$(UVICORN) app.main:app --host 0.0.0.0 --port 8000 --reload & cd $(FRONTEND_DIR) && $(NPM) run dev -- --host 0.0.0.0 & wait
 
 clean:
 	rm -rf $(VENV)
