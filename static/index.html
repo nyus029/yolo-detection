@@ -3,162 +3,869 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>YOLOv8 Motion Detection PoC</title>
+    <title>YOLOv8 Person Heatmap</title>
+    <!-- Geist Design System: Fonts (Vercel) -->
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.2.5/latin.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/@fontsource/geist-mono@5.0.3/latin-400.css"
+    />
     <style>
+      /* --- Geist Design System tokens (light theme) --- */
       :root {
-        --bg: #111827;
-        --fg: #f9fafb;
-        --accent: #22c55e;
-        --warn: #f59e0b;
+        /* Backgrounds */
+        --geist-bg-1: #ffffff;
+        --geist-bg-2: #fafafa;
+        /* Component backgrounds */
+        --geist-bg-component-1: #fafafa;
+        --geist-bg-component-2: #f5f5f5;
+        --geist-bg-component-3: #e5e5e5;
+        /* Borders */
+        --geist-border: #e5e5e5;
+        --geist-border-hover: #d4d4d4;
+        --geist-border-active: #a3a3a3;
+        /* High contrast (buttons, etc.) */
+        --geist-high-contrast: #0a0a0a;
+        --geist-high-contrast-hover: #262626;
+        /* Text */
+        --geist-text-primary: #0a0a0a;
+        --geist-text-secondary: #737373;
+        /* Semantic */
+        --geist-success: #22c55e;
+        --geist-success-foreground: #ffffff;
+        --geist-danger: #ef4444;
+        --geist-danger-foreground: #ffffff;
+        --geist-accent: #3b82f6;
+        /* Typography (Geist) */
+        --font-sans: "Geist Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        --font-mono: "Geist Mono", ui-monospace, monospace;
+        /* Spacing (4px grid) */
+        --space-1: 4px;
+        --space-2: 8px;
+        --space-3: 12px;
+        --space-4: 16px;
+        --space-5: 20px;
+        --space-6: 24px;
+        --space-8: 32px;
+        --radius: 8px;
+        --radius-lg: 12px;
+        --focus-ring: 0 0 0 2px var(--geist-bg-1), 0 0 0 4px var(--geist-accent);
       }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
       body {
         margin: 0;
-        font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
-        background: radial-gradient(circle at top, #1f2937, var(--bg));
-        color: var(--fg);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--geist-text-primary);
+        background: var(--geist-bg-1);
+        -webkit-font-smoothing: antialiased;
       }
+
       .wrap {
-        max-width: 760px;
+        max-width: 920px;
         margin: 0 auto;
-        padding: 16px;
+        padding: var(--space-8) var(--space-4) var(--space-8);
       }
+
+      /* Typography — Geist scale */
       h1 {
-        font-size: 1.2rem;
+        margin: 0 0 var(--space-2);
+        font-size: 1.75rem;
+        font-weight: 600;
+        letter-spacing: -0.02em;
       }
-      #videoWrap {
+
+      .hint {
+        color: var(--geist-text-secondary);
+        font-size: 0.875rem;
+        margin: 0 0 var(--space-6);
+      }
+
+      /* Cards / Panels */
+      .card {
+        margin-top: var(--space-4);
+        padding: var(--space-5);
+        background: var(--geist-bg-component-1);
+        border: 1px solid var(--geist-border);
+        border-radius: var(--radius-lg);
+      }
+
+      .card-title {
+        margin: 0 0 var(--space-2);
+        font-size: 0.8125rem;
+        font-weight: 600;
+        color: var(--geist-text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      /* Controls */
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        gap: var(--space-4);
+      }
+
+      .field {
+        display: grid;
+        gap: var(--space-1);
+      }
+
+      .field label {
+        font-size: 0.8125rem;
+        font-weight: 500;
+        color: var(--geist-text-secondary);
+      }
+
+      .field input {
+        width: 120px;
+        height: 40px;
+        padding: 0 var(--space-3);
+        font-family: var(--font-mono);
+        font-size: 0.875rem;
+        color: var(--geist-text-primary);
+        background: var(--geist-bg-1);
+        border: 1px solid var(--geist-border);
+        border-radius: var(--radius);
+        transition: border-color 0.15s, box-shadow 0.15s;
+      }
+
+      .field input:hover {
+        border-color: var(--geist-border-hover);
+      }
+
+      .field input:focus {
+        outline: none;
+        border-color: var(--geist-accent);
+        box-shadow: var(--focus-ring);
+      }
+
+      .field input::placeholder {
+        color: var(--geist-text-secondary);
+      }
+
+      /* Buttons — Geist style */
+      button {
+        font-family: var(--font-sans);
+        font-size: 0.875rem;
+        font-weight: 500;
+        height: 40px;
+        padding: 0 var(--space-4);
+        border: none;
+        border-radius: var(--radius);
+        cursor: pointer;
+        transition: background 0.15s, opacity 0.15s;
+      }
+
+      button:focus-visible {
+        outline: none;
+        box-shadow: var(--focus-ring);
+      }
+
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .btn-primary {
+        background: var(--geist-high-contrast);
+        color: var(--geist-bg-1);
+      }
+
+      .btn-primary:hover:not(:disabled) {
+        background: var(--geist-high-contrast-hover);
+      }
+
+      .btn-success {
+        background: var(--geist-success);
+        color: var(--geist-success-foreground);
+      }
+
+      .btn-success:hover:not(:disabled) {
+        filter: brightness(1.05);
+      }
+
+      .btn-danger {
+        background: var(--geist-danger);
+        color: var(--geist-danger-foreground);
+      }
+
+      .btn-danger:hover:not(:disabled) {
+        filter: brightness(1.08);
+      }
+
+      /* Video / Canvas area */
+      #videoWrap,
+      .heatmapFrame {
         position: relative;
-        border-radius: 12px;
+        margin-top: var(--space-4);
+        border-radius: var(--radius-lg);
         overflow: hidden;
         background: #000;
+        border: 1px solid var(--geist-border);
       }
+
       video,
-      canvas {
+      canvas,
+      img {
         width: 100%;
         display: block;
+        vertical-align: middle;
       }
+
       #overlay {
         position: absolute;
         left: 0;
         top: 0;
       }
-      button {
-        margin-top: 12px;
-        border: none;
-        border-radius: 8px;
-        padding: 10px 14px;
-        font-weight: 600;
-        background: var(--accent);
-        color: #052e16;
-      }
+
+      /* Status */
       #status {
-        margin-top: 8px;
-        color: #d1d5db;
+        margin: var(--space-3) 0 0;
+        font-size: 0.875rem;
+        color: var(--geist-text-secondary);
       }
-      .hint {
-        color: #9ca3af;
-        font-size: 0.9rem;
+
+      /* Stats grid — Geist layout */
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: var(--space-4);
+      }
+
+      .stat {
+        padding: var(--space-3) 0;
+      }
+
+      .statLabel {
+        font-size: 0.75rem;
+        font-weight: 500;
+        color: var(--geist-text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      .statValue {
+        margin-top: var(--space-1);
+        font-family: var(--font-mono);
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--geist-text-primary);
+      }
+
+      /* Status badge (Geist Pill style) */
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-1);
+        padding: var(--space-1) var(--space-2);
+        font-size: 0.75rem;
+        font-weight: 500;
+        border-radius: 9999px;
+      }
+
+      .badge-neutral {
+        background: var(--geist-bg-component-2);
+        color: var(--geist-text-secondary);
+      }
+
+      .badge-success {
+        background: rgba(34, 197, 94, 0.15);
+        color: var(--geist-success);
+      }
+
+      .badge-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: currentColor;
+      }
+
+      .badge-success .badge-dot {
+        animation: pulse 1.5s ease-in-out infinite;
+      }
+
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+      }
+
+      /* Heatmap panel */
+      .heatmapPanel p {
+        margin: 0 0 var(--space-4);
+        font-size: 0.875rem;
+        color: var(--geist-text-secondary);
+      }
+
+      .historyList {
+        display: grid;
+        gap: var(--space-4);
+      }
+
+      .historyItem {
+        display: grid;
+        grid-template-columns: 160px 1fr;
+        gap: var(--space-4);
+        padding: var(--space-3);
+        border: 1px solid var(--geist-border);
+        border-radius: var(--radius);
+        background: var(--geist-bg-1);
+      }
+
+      .historyThumb {
+        width: 100%;
+        border-radius: var(--radius);
+        border: 1px solid var(--geist-border);
+        background: var(--geist-bg-2);
+      }
+
+      .historyMeta {
+        display: grid;
+        gap: var(--space-1);
+        min-width: 0;
+      }
+
+      .historyTitle {
+        font-weight: 600;
+      }
+
+      .historyText {
+        color: var(--geist-text-secondary);
+        word-break: break-all;
+      }
+
+      .historyEmpty {
+        color: var(--geist-text-secondary);
+        font-size: 0.875rem;
+      }
+
+      @media (max-width: 640px) {
+        .historyItem {
+          grid-template-columns: 1fr;
+        }
       }
     </style>
   </head>
   <body>
     <div class="wrap">
-      <h1>YOLOv8 動作検出 PoC（手上げ検出）</h1>
-      <p class="hint">同一Wi-Fi上のスマホからこのページを開いて、開始を押してください。</p>
-      <div id="videoWrap">
-        <video id="video" playsinline autoplay muted></video>
-        <canvas id="overlay"></canvas>
-      </div>
-      <button id="startBtn">カメラ開始</button>
-      <p id="status">未開始</p>
+      <h1>YOLOv8 Person Heatmap PoC</h1>
+      <p class="hint">
+        固定したスマホカメラから人物のみを検出し、足元位置を床面へ推定投影して、部屋平面の長方形ヒートマップを作成します。
+        `カメラ起動` -> `部屋の構造推定` -> `計測開始` の順で操作してください。
+      </p>
+
+      <section class="card" aria-labelledby="controls-heading">
+        <h2 id="controls-heading" class="card-title">計測設定</h2>
+        <div class="controls">
+          <div class="field">
+            <label for="durationInput">計測時間（分）</label>
+            <input
+              id="durationInput"
+              type="number"
+              min="1"
+              max="1440"
+              value="60"
+            />
+          </div>
+          <div class="field">
+            <label for="intervalInput">送信間隔（ms）</label>
+            <input
+              id="intervalInput"
+              type="number"
+              min="200"
+              max="5000"
+              value="1000"
+            />
+          </div>
+          <div class="field">
+            <label for="roomWidthInput">部屋幅（任意単位）</label>
+            <input id="roomWidthInput" type="number" min="1" step="0.5" value="10" />
+          </div>
+          <div class="field">
+            <label for="roomHeightInput">部屋奥行（任意単位）</label>
+            <input id="roomHeightInput" type="number" min="1" step="0.5" value="10" />
+          </div>
+          <div class="field">
+            <label for="floorTopInput">床開始Y比率</label>
+            <input id="floorTopInput" type="number" min="0.05" max="0.95" step="0.01" value="0.35" />
+          </div>
+          <div class="field">
+            <label for="topWidthInput">奥側の見かけ幅</label>
+            <input id="topWidthInput" type="number" min="0.05" max="1" step="0.01" value="0.38" />
+          </div>
+          <div class="field">
+            <label for="bottomWidthInput">手前の見かけ幅</label>
+            <input id="bottomWidthInput" type="number" min="0.05" max="1" step="0.01" value="1.0" />
+          </div>
+          <button id="cameraBtn" class="btn-primary" type="button">カメラ起動</button>
+          <button id="estimateBtn" class="btn-primary" type="button" disabled>部屋の構造推定</button>
+          <button id="startBtn" class="btn-success" type="button" disabled>計測開始</button>
+          <button id="stopBtn" class="btn-danger" type="button" disabled>計測停止</button>
+        </div>
+      </section>
+
+      <section class="card" aria-label="カメラ映像">
+        <div id="videoWrap">
+          <video id="video" playsinline autoplay muted aria-label="カメラ映像"></video>
+          <canvas id="overlay" aria-hidden="true"></canvas>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="stats-heading">
+        <h2 id="stats-heading" class="card-title">計測状況</h2>
+        <div class="stats">
+          <div class="stat">
+            <div class="statLabel">状態</div>
+            <div class="statValue" id="stateValue">
+              <span id="stateBadge" class="badge badge-neutral"><span class="badge-dot"></span> 待機中</span>
+            </div>
+          </div>
+          <div class="stat">
+            <div class="statLabel">経過時間</div>
+            <div class="statValue" id="elapsedValue">00:00</div>
+          </div>
+          <div class="stat">
+            <div class="statLabel">残り時間</div>
+            <div class="statValue" id="remainingValue">--:--</div>
+          </div>
+          <div class="stat">
+            <div class="statLabel">処理フレーム数</div>
+            <div class="statValue" id="framesValue">0</div>
+          </div>
+          <div class="stat">
+            <div class="statLabel">現在の検出人数</div>
+            <div class="statValue" id="peopleValue">0</div>
+          </div>
+        </div>
+        <p id="status">未開始</p>
+      </section>
+
+      <section class="card heatmapPanel" aria-labelledby="heatmap-heading">
+        <h2 id="heatmap-heading" class="card-title">ヒートマップ</h2>
+        <p>
+          カメラ画像ではなく、部屋平面を長方形で表した占有ヒートマップです。上側が奥、下側がカメラ手前です。
+        </p>
+        <div class="heatmapFrame">
+          <img id="heatmapImage" alt="人物ヒートマップ" />
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="history-heading">
+        <h2 id="history-heading" class="card-title">ローカル履歴</h2>
+        <div id="historyList" class="historyList"></div>
+      </section>
     </div>
 
     <script>
       const video = document.getElementById("video");
       const overlay = document.getElementById("overlay");
       const statusEl = document.getElementById("status");
+      const cameraBtn = document.getElementById("cameraBtn");
+      const estimateBtn = document.getElementById("estimateBtn");
       const startBtn = document.getElementById("startBtn");
+      const stopBtn = document.getElementById("stopBtn");
+      const durationInput = document.getElementById("durationInput");
+      const intervalInput = document.getElementById("intervalInput");
+      const roomWidthInput = document.getElementById("roomWidthInput");
+      const roomHeightInput = document.getElementById("roomHeightInput");
+      const floorTopInput = document.getElementById("floorTopInput");
+      const topWidthInput = document.getElementById("topWidthInput");
+      const bottomWidthInput = document.getElementById("bottomWidthInput");
+      const stateBadge = document.getElementById("stateBadge");
+      const elapsedValue = document.getElementById("elapsedValue");
+      const remainingValue = document.getElementById("remainingValue");
+      const framesValue = document.getElementById("framesValue");
+      const peopleValue = document.getElementById("peopleValue");
+      const heatmapImage = document.getElementById("heatmapImage");
+      const historyList = document.getElementById("historyList");
       const ctx = overlay.getContext("2d");
       const captureCanvas = document.createElement("canvas");
       const captureCtx = captureCanvas.getContext("2d");
+      const HISTORY_STORAGE_KEY = "personHeatmapHistory";
+      const HISTORY_LIMIT = 10;
 
       let running = false;
+      let stream = null;
+      let sessionId = null;
+      let sessionStartedAt = null;
+      let wakeLock = null;
+      let structureEstimated = false;
+
+      function loadHistory() {
+        try {
+          return JSON.parse(localStorage.getItem(HISTORY_STORAGE_KEY) || "[]");
+        } catch {
+          return [];
+        }
+      }
+
+      function saveHistory(items) {
+        localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(items.slice(0, HISTORY_LIMIT)));
+      }
+
+      function renderHistory() {
+        const items = loadHistory();
+        if (items.length === 0) {
+          historyList.innerHTML = '<p class="historyEmpty">まだ保存されたヒートマップはありません。</p>';
+          return;
+        }
+
+        historyList.innerHTML = items
+          .map(
+            (item) => `
+              <article class="historyItem">
+                <img class="historyThumb" src="${item.imageDataUrl}" alt="保存済みヒートマップ" />
+                <div class="historyMeta">
+                  <div class="historyTitle">${item.savedAtLabel}</div>
+                  <div class="historyText">セッションID: ${item.sessionId}</div>
+                  <div class="historyText">計測時間: ${item.durationMinutes}分 / 処理フレーム: ${item.processedFrames}</div>
+                  <div class="historyText">累積人物検出: ${item.personDetections} / 平面投影: ${item.projectedPoints}</div>
+                  <div class="historyText">部屋設定: ${item.roomWidth} x ${item.roomHeight} / floorTop=${item.floorTopY}</div>
+                  <div class="historyText">サーバ保存PNG: ${item.savedHeatmapPath || "未保存"}</div>
+                  <div class="historyText">サーバ保存JSON: ${item.savedMetadataPath || "未保存"}</div>
+                </div>
+              </article>
+            `,
+          )
+          .join("");
+      }
+
+      async function fetchHeatmapDataUrl() {
+        if (!sessionId) return null;
+        const res = await fetch(`/session/${sessionId}/heatmap.png?t=${Date.now()}`);
+        if (!res.ok) return null;
+        const blob = await res.blob();
+        return await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.onerror = () => reject(new Error("Failed to read heatmap blob"));
+          reader.readAsDataURL(blob);
+        });
+      }
+
+      async function persistLocalHistory(session) {
+        if (!session) return;
+        const imageDataUrl = await fetchHeatmapDataUrl();
+        if (!imageDataUrl) return;
+
+        const items = loadHistory();
+        items.unshift({
+          sessionId: session.session_id,
+          savedAt: session.ended_at || new Date().toISOString(),
+          savedAtLabel: new Date(session.ended_at || Date.now()).toLocaleString(),
+          durationMinutes: session.duration_minutes || 0,
+          processedFrames: session.processed_frames || 0,
+          personDetections: session.person_detections || 0,
+          projectedPoints: session.projected_points || 0,
+          roomWidth: session.projection?.room_width_units || "",
+          roomHeight: session.projection?.room_height_units || "",
+          floorTopY: session.projection?.floor_top_y_ratio || "",
+          savedHeatmapPath: session.saved_heatmap_path || "",
+          savedMetadataPath: session.saved_metadata_path || "",
+          imageDataUrl,
+        });
+        saveHistory(items);
+        renderHistory();
+      }
+
+      function formatSeconds(totalSeconds) {
+        if (totalSeconds == null || Number.isNaN(totalSeconds)) return "--:--";
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+      }
+
+      function setStateBadge(active) {
+        stateBadge.className = active ? "badge badge-success" : "badge badge-neutral";
+        stateBadge.innerHTML = active
+          ? '<span class="badge-dot"></span> 計測中'
+          : '<span class="badge-dot"></span> 待機中';
+      }
 
       function drawDetections(detections, width, height) {
         overlay.width = width;
         overlay.height = height;
         ctx.clearRect(0, 0, width, height);
         ctx.lineWidth = 3;
-        ctx.font = "16px sans-serif";
+        ctx.font = '16px "Geist Mono", monospace';
 
         detections.forEach((d) => {
           const [x1, y1, x2, y2] = d.bbox;
           const w = x2 - x1;
           const h = y2 - y1;
-          ctx.strokeStyle = d.actions.includes("hand_raised") ? "#f59e0b" : "#22c55e";
+          const footX = (x1 + x2) / 2;
+          const footY = y2;
+
+          ctx.strokeStyle = "#22c55e";
           ctx.strokeRect(x1, y1, w, h);
-          const label = d.actions.length ? d.actions.join(", ") : "person";
-          ctx.fillStyle = "rgba(0,0,0,0.55)";
-          ctx.fillRect(x1, Math.max(0, y1 - 24), 160, 22);
+          ctx.beginPath();
+          ctx.arc(footX, footY, 6, 0, Math.PI * 2);
+          ctx.fillStyle = "#eab308";
+          ctx.fill();
+          ctx.fillStyle = "rgba(0,0,0,0.6)";
+          ctx.fillRect(x1, Math.max(0, y1 - 24), 110, 22);
           ctx.fillStyle = "#fff";
-          ctx.fillText(label, x1 + 6, Math.max(16, y1 - 8));
+          ctx.fillText(`person ${Math.round((d.score || 0) * 100)}%`, x1 + 6, Math.max(16, y1 - 8));
         });
       }
 
-      async function sendFrame() {
-        if (!running || video.videoWidth === 0 || video.videoHeight === 0) return;
-        captureCanvas.width = video.videoWidth;
-        captureCanvas.height = video.videoHeight;
-        captureCtx.drawImage(video, 0, 0);
-        const blob = await new Promise((resolve) => captureCanvas.toBlob(resolve, "image/jpeg", 0.7));
-
-        const form = new FormData();
-        form.append("file", blob, "frame.jpg");
-
-        try {
-          const res = await fetch("/detect", { method: "POST", body: form });
-          const data = await res.json();
-          drawDetections(data.detections || [], video.videoWidth, video.videoHeight);
-          statusEl.textContent = `検出人数: ${(data.detections || []).length}`;
-        } catch (e) {
-          statusEl.textContent = `通信エラー: ${e}`;
+      function applySessionStatus(session) {
+        if (!session) return;
+        sessionStartedAt = session.started_at;
+        setStateBadge(!!session.is_active);
+        framesValue.textContent = String(session.processed_frames || 0);
+        peopleValue.textContent = String(session.last_person_count || 0);
+        remainingValue.textContent = formatSeconds(session.remaining_seconds);
+        if (sessionStartedAt) {
+          const elapsed = Math.max(
+            0,
+            Math.floor((Date.now() - new Date(sessionStartedAt).getTime()) / 1000),
+          );
+          elapsedValue.textContent = formatSeconds(elapsed);
         }
       }
 
-      startBtn.addEventListener("click", async () => {
-        const isLocalhost =
-          location.hostname === "localhost" || location.hostname === "127.0.0.1";
+      async function refreshHeatmap() {
+        if (!sessionId) return;
+        heatmapImage.src = `/session/${sessionId}/heatmap.png?t=${Date.now()}`;
+      }
+
+      async function stopMeasurement(reason = "計測停止") {
+        if (!running) return;
+        running = false;
+        setStateBadge(false);
+        estimateBtn.disabled = !stream;
+        startBtn.disabled = !stream || !structureEstimated;
+        stopBtn.disabled = true;
+
+        if (sessionId) {
+          try {
+            const res = await fetch(`/session/${sessionId}/stop`, { method: "POST" });
+            if (res.ok) {
+              const session = await res.json();
+              applySessionStatus(session);
+              await persistLocalHistory(session);
+            }
+          } catch (error) {
+            statusEl.textContent = `停止APIエラー: ${error}`;
+          }
+        }
+
+        await refreshHeatmap();
+
+        if (wakeLock) {
+          try {
+            await wakeLock.release();
+          } catch {}
+          wakeLock = null;
+        }
+
+        statusEl.textContent = reason;
+      }
+
+      async function sendFrameLoop() {
+        while (running) {
+          if (video.videoWidth === 0 || video.videoHeight === 0) {
+            await new Promise((resolve) => setTimeout(resolve, 250));
+            continue;
+          }
+
+          captureCanvas.width = video.videoWidth;
+          captureCanvas.height = video.videoHeight;
+          captureCtx.drawImage(video, 0, 0);
+          const blob = await new Promise((resolve) => captureCanvas.toBlob(resolve, "image/jpeg", 0.7));
+          if (!blob) {
+            statusEl.textContent = "フレーム取得に失敗しました";
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            continue;
+          }
+
+          const form = new FormData();
+          form.append("file", blob, "frame.jpg");
+          if (sessionId) {
+            form.append("session_id", sessionId);
+          }
+
+          try {
+            const res = await fetch("/detect", { method: "POST", body: form });
+            if (!res.ok) {
+              throw new Error(`HTTP ${res.status}`);
+            }
+            const data = await res.json();
+            drawDetections(data.detections || [], video.videoWidth, video.videoHeight);
+            const counts = data.counts || {};
+            peopleValue.textContent = String(counts.person || 0);
+            if (data.session) {
+              applySessionStatus(data.session);
+              if (!data.session.is_active) {
+                await stopMeasurement("計測時間が終了しました");
+                return;
+              }
+            }
+            statusEl.textContent =
+              `人物検出中: ${counts.person || 0}人 / 平面投影: ${data.session?.projected_points || 0}`;
+          } catch (error) {
+            statusEl.textContent = `通信エラー: ${error}`;
+          }
+
+          await new Promise((resolve) =>
+            setTimeout(resolve, Math.max(200, Number(intervalInput.value) || 1000)),
+          );
+        }
+      }
+
+      async function ensureCamera() {
+        if (stream) return;
+        const isLocalhost = location.hostname === "localhost" || location.hostname === "127.0.0.1";
         if (!window.isSecureContext && !isLocalhost) {
-          statusEl.textContent =
-            "カメラ起動失敗: HTTPSでアクセスしてください（localhost以外のHTTPではカメラ不可）";
-          return;
+          throw new Error("HTTPSでアクセスしてください（localhost以外のHTTPではカメラ不可）");
         }
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          statusEl.textContent =
-            "カメラ起動失敗: このブラウザ/接続では getUserMedia が利用できません";
-          return;
+          throw new Error("このブラウザ/接続では getUserMedia が利用できません");
         }
+
         try {
-          let stream;
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: "environment" },
+            audio: false,
+          });
+        } catch {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false,
+          });
+        }
+
+        video.srcObject = stream;
+        await video.play();
+      }
+
+      async function startCamera() {
+        await ensureCamera();
+        cameraBtn.disabled = true;
+        estimateBtn.disabled = false;
+        structureEstimated = false;
+        startBtn.disabled = true;
+        statusEl.textContent = "カメラ起動済み。次に部屋の構造推定を実行してください。";
+      }
+
+      async function estimateStructure() {
+        if (!stream) {
+          throw new Error("先にカメラ起動を押してください");
+        }
+        if (video.videoWidth === 0 || video.videoHeight === 0) {
+          throw new Error("カメラ映像がまだ準備中です");
+        }
+
+        captureCanvas.width = video.videoWidth;
+        captureCanvas.height = video.videoHeight;
+        captureCtx.drawImage(video, 0, 0);
+        const blob = await new Promise((resolve) => captureCanvas.toBlob(resolve, "image/jpeg", 0.85));
+        if (!blob) {
+          throw new Error("構造推定用フレームの取得に失敗しました");
+        }
+
+        const form = new FormData();
+        form.append("file", blob, "structure.jpg");
+        const res = await fetch("/estimate-structure", { method: "POST", body: form });
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+
+        const data = await res.json();
+        const projection = data.projection || {};
+        floorTopInput.value = String(projection.floor_top_y_ratio ?? floorTopInput.value);
+        topWidthInput.value = String(projection.floor_top_width_ratio ?? topWidthInput.value);
+        bottomWidthInput.value = String(projection.floor_bottom_width_ratio ?? bottomWidthInput.value);
+        structureEstimated = true;
+        startBtn.disabled = false;
+        statusEl.textContent = `構造推定完了 (confidence=${data.confidence ?? "n/a"})。計測開始できます。`;
+      }
+
+      async function startMeasurement() {
+        if (!stream) {
+          throw new Error("先にカメラ起動を押してください");
+        }
+        if (!structureEstimated) {
+          throw new Error("先に部屋の構造推定を実行してください");
+        }
+        const form = new FormData();
+        form.append("duration_minutes", String(Math.max(1, Number(durationInput.value) || 60)));
+        form.append("room_width_units", String(Math.max(1, Number(roomWidthInput.value) || 10)));
+        form.append("room_height_units", String(Math.max(1, Number(roomHeightInput.value) || 10)));
+        form.append("floor_top_y_ratio", String(Number(floorTopInput.value) || 0.35));
+        form.append("floor_top_width_ratio", String(Number(topWidthInput.value) || 0.38));
+        form.append("floor_bottom_width_ratio", String(Number(bottomWidthInput.value) || 1.0));
+        const res = await fetch("/session/start", { method: "POST", body: form });
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+
+        const session = await res.json();
+        sessionId = session.session_id;
+        running = true;
+        setStateBadge(true);
+        cameraBtn.disabled = true;
+        estimateBtn.disabled = true;
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+        applySessionStatus(session);
+        statusEl.textContent = "部屋平面ヒートマップ計測を開始しました";
+
+        if ("wakeLock" in navigator) {
           try {
-            stream = await navigator.mediaDevices.getUserMedia({
-              video: { facingMode: "environment" },
-              audio: false,
-            });
+            wakeLock = await navigator.wakeLock.request("screen");
           } catch {
-            // Some devices reject facingMode constraints; retry with generic camera.
-            stream = await navigator.mediaDevices.getUserMedia({
-              video: true,
-              audio: false,
-            });
+            wakeLock = null;
           }
-          video.srcObject = stream;
-          running = true;
-          statusEl.textContent = "推論中...";
-          setInterval(sendFrame, 600);
-        } catch (e) {
-          statusEl.textContent = `カメラ起動失敗: ${e}`;
+        }
+
+        sendFrameLoop();
+      }
+
+      cameraBtn.addEventListener("click", async () => {
+        if (stream) return;
+        try {
+          await startCamera();
+        } catch (error) {
+          statusEl.textContent = `カメラ起動失敗: ${error}`;
         }
       });
+
+      estimateBtn.addEventListener("click", async () => {
+        if (running) return;
+        try {
+          await estimateStructure();
+        } catch (error) {
+          statusEl.textContent = `構造推定失敗: ${error}`;
+        }
+      });
+
+      startBtn.addEventListener("click", async () => {
+        if (running) return;
+        try {
+          await startMeasurement();
+        } catch (error) {
+          statusEl.textContent = `開始失敗: ${error}`;
+        }
+      });
+
+      stopBtn.addEventListener("click", async () => {
+        await stopMeasurement("ユーザーが計測を停止しました");
+      });
+
+      renderHistory();
     </script>
   </body>
 </html>
