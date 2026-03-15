@@ -1,4 +1,4 @@
-import type { DetectResponse, EstimateStructureResponse, SessionStatus, StartSessionInput } from "./types";
+import type { DetectResponse, EstimateStructureResponse, HeatmapData, SessionStatus, StartSessionInput } from "./types";
 
 export async function fetchHeatmapDataUrl(sessionId: string | null): Promise<string | null> {
   if (!sessionId) return null;
@@ -17,6 +17,15 @@ export async function fetchHeatmapDataUrl(sessionId: string | null): Promise<str
 
 export async function stopSession(sessionId: string): Promise<Response> {
   return fetch(`/session/${sessionId}/stop`, { method: "POST" });
+}
+
+export async function fetchHeatmapData(sessionId: string): Promise<HeatmapData> {
+  const res = await fetch(`/session/${sessionId}/heatmap-data?t=${Date.now()}`);
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`);
+  }
+
+  return res.json() as Promise<HeatmapData>;
 }
 
 export async function detectFrame(blob: Blob, sessionId: string | null): Promise<DetectResponse> {

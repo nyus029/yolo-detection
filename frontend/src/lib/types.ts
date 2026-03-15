@@ -33,6 +33,18 @@ export type SessionStatus = {
   projection: Projection;
 };
 
+export type HeatmapData = {
+  grid: number[][];
+  max_value: number;
+  grid_width: number;
+  grid_height: number;
+  current_count: number;
+  elapsed_seconds: number;
+  room_width_units: number;
+  room_height_units: number;
+  is_active: boolean;
+};
+
 export type DetectResponse = {
   detections: Detection[];
   counts: {
