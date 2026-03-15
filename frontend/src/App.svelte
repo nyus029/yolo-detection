@@ -22,6 +22,7 @@
   let sessionId: string | null = null;
   let sessionStartedAt: string | null = null;
   let wakeLock: { release: () => Promise<void> } | null = null;
+  let cameraActive = false;
   let structureEstimated = false;
   let statusText = "未開始";
   let stateActive = false;
@@ -179,6 +180,7 @@
   async function handleStartCamera(): Promise<void> {
     if (!camera) return;
     await camera.ensureCamera();
+    cameraActive = true;
     structureEstimated = false;
     statusText = "カメラ起動済み。次に部屋の構造推定を実行してください。";
   }
@@ -236,6 +238,7 @@
 
   onMount(() => {
     overlayCtx = overlayEl.getContext("2d");
+    videoEl.setAttribute("webkit-playsinline", "true");
     camera = createCameraController(videoEl);
     historyItems = loadHistory();
   });
@@ -285,21 +288,21 @@
         <label for="bottomWidthInput">手前の見かけ幅</label>
         <input id="bottomWidthInput" type="number" min="0.05" max="1" step="0.01" bind:value={floorBottomWidthRatio} />
       </div>
-      <button class="btn-primary" type="button" disabled={!!camera?.hasStream()} onclick={async () => {
+      <button class="btn-primary" type="button" disabled={cameraActive} onclick={async () => {
         try {
           await handleStartCamera();
         } catch (error) {
           statusText = `カメラ起動失敗: ${error}`;
         }
       }}>カメラ起動</button>
-      <button class="btn-primary" type="button" disabled={!camera?.hasStream() || running} onclick={async () => {
+      <button class="btn-primary" type="button" disabled={!cameraActive || running} onclick={async () => {
         try {
           await handleEstimateStructure();
         } catch (error) {
           statusText = `構造推定失敗: ${error}`;
         }
       }}>部屋の構造推定</button>
-      <button class="btn-success" type="button" disabled={!camera?.hasStream() || !structureEstimated || running} onclick={async () => {
+      <button class="btn-success" type="button" disabled={!cameraActive || !structureEstimated || running} onclick={async () => {
         try {
           await handleStartMeasurement();
         } catch (error) {
@@ -517,6 +520,7 @@
     position: absolute;
     left: 0;
     top: 0;
+    pointer-events: none;
   }
 
   .stats {
