@@ -34,7 +34,6 @@ frontend/
   svelte.config.js
   tsconfig.json
   vite.config.ts
-static/
   dist/            # Vite build の出力先
 docs/
   architecture.md  # この設計メモ
@@ -47,8 +46,8 @@ frontend/src/App.svelte -> frontend/src/lib/api-client.ts
 frontend/src/App.svelte -> frontend/src/lib/camera.ts
 frontend/src/App.svelte -> frontend/src/lib/history.ts
 frontend/src/lib/api-client.ts -> FastAPI API
-frontend build -> static/dist
-FastAPI / -> static/dist/index.html
+frontend build -> frontend/dist
+FastAPI / -> frontend/dist/index.html
 app/main.py -> app/api.py
 app/api.py -> app/detection.py
 app/api.py -> app/structure.py
@@ -65,7 +64,7 @@ app/heatmap.py -> cv2 / numpy / filesystem
 ### `app/main.py`
 
 - `FastAPI` の生成
-- built frontend の static mount
+- built frontend の assets mount
 - detector / session store の生成
 - route 登録
 

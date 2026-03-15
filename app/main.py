@@ -6,7 +6,7 @@ from app.detection import YOLOPersonDetector
 from app.heatmap import SessionStore
 
 app = FastAPI(title="YOLOv8 Object Detection PoC")
-app.mount("/static", StaticFiles(directory="static/dist"), name="static")
+app.mount("/assets", StaticFiles(directory="frontend/dist/assets"), name="assets")
 
 detector = YOLOPersonDetector()
 session_store = SessionStore()

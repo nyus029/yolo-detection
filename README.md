@@ -17,7 +17,7 @@ make frontend-build
 make run
 ```
 
-- `make run` は FastAPI を `:8000` で起動し、`static/dist` のビルド済みフロントエンドを配信します。
+- `make run` は FastAPI を `:8000` で起動し、`frontend/dist` のビルド済みフロントエンドを配信します。
 - フロントエンドを単体開発する場合は別ターミナルで `make frontend-dev` を使います。
 - `make frontend-dev` の開発サーバは通常 `http://127.0.0.1:5173` で起動し、API は `:8000` に proxy されます。
 - PCでサーバを起動し、同じWi-Fiのスマホで `http://<PCのIP>:8000` を開きます。
@@ -80,8 +80,8 @@ ipconfig getifaddr en1
 ## フロントエンド構成
 
 - `frontend/`: Svelte + TypeScript + Vite のソースコード
-- `static/dist/`: Vite build の出力先
-- FastAPI は `/` で `static/dist/index.html` を返し、`/static` でビルド済み asset を配信します
+- `frontend/dist/`: Vite build の出力先
+- FastAPI は `/` で `frontend/dist/index.html` を返し、`/assets` でビルド済み asset を配信します
 
 ## 保存先
 
