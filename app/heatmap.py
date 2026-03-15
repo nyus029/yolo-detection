@@ -10,6 +10,7 @@ from uuid import uuid4
 
 import cv2
 import numpy as np
+from scipy.ndimage import gaussian_filter
 
 UTC = timezone.utc
 
@@ -149,6 +150,24 @@ class HeatmapSession:
             "projection": asdict(self.projection),
         }
 
+    def to_heatmap_data(self) -> dict[str, Any]:
+        with self.lock:
+            heatmap = self.heatmap.copy()
+            current_count = self.last_person_count
+
+        elapsed_seconds = max(0, int((datetime.now(UTC) - self.started_at).total_seconds()))
+        return {
+            "grid": heatmap.tolist(),
+            "max_value": float(heatmap.max()) if heatmap.size else 0.0,
+            "grid_width": self.grid_width,
+            "grid_height": self.grid_height,
+            "current_count": current_count,
+            "elapsed_seconds": elapsed_seconds,
+            "room_width_units": self.projection.room_width_units,
+            "room_height_units": self.projection.room_height_units,
+            "is_active": self.is_active,
+        }
+
     def render_heatmap_png(self) -> bytes | None:
         with self.lock:
             heatmap = self.heatmap.copy()
@@ -163,20 +182,14 @@ class HeatmapSession:
         plane_height = canvas_height - margin_top - margin_bottom
         canvas = np.full((canvas_height, canvas_width, 3), 250, dtype=np.uint8)
 
-        plane = np.full((plane_height, plane_width, 3), 245, dtype=np.uint8)
+        plane = np.full((plane_height, plane_width, 3), 244, dtype=np.uint8)
         if float(heatmap.max()) > 0:
             normalized = heatmap / float(heatmap.max())
-            resized = cv2.resize(normalized, (plane_width, plane_height), interpolation=cv2.INTER_CUBIC)
-            blurred = cv2.GaussianBlur(resized, (0, 0), sigmaX=18, sigmaY=18)
-            colored = cv2.applyColorMap(np.uint8(np.clip(blurred, 0.0, 1.0) * 255), cv2.COLORMAP_TURBO)
-            plane = cv2.addWeighted(np.full_like(colored, 255), 0.18, colored, 0.82, 0.0)
-
-        for gx in range(self.grid_width + 1):
-            x = int(gx * plane_width / self.grid_width)
-            cv2.line(plane, (x, 0), (x, plane_height), (224, 224, 224), 1)
-        for gy in range(self.grid_height + 1):
-            y = int(gy * plane_height / self.grid_height)
-            cv2.line(plane, (0, y), (plane_width, y), (224, 224, 224), 1)
+            smoothed = gaussian_filter(normalized, sigma=1.35)
+            resized = cv2.resize(smoothed, (plane_width, plane_height), interpolation=cv2.INTER_CUBIC)
+            blurred = cv2.GaussianBlur(resized, (0, 0), sigmaX=12, sigmaY=12)
+            colored = cv2.applyColorMap(np.uint8(np.clip(blurred, 0.0, 1.0) * 255), cv2.COLORMAP_INFERNO)
+            plane = cv2.addWeighted(np.full_like(colored, 248), 0.08, colored, 0.92, 0.0)
 
         canvas[margin_top : margin_top + plane_height, margin_left : margin_left + plane_width] = plane
         cv2.rectangle(
@@ -258,7 +271,7 @@ class HeatmapSession:
         legend_bottom = margin_top + plane_height
         for i in range(legend_bottom - legend_top):
             ratio = 1.0 - (i / max(1, legend_bottom - legend_top - 1))
-            color = cv2.applyColorMap(np.uint8([[ratio * 255]]), cv2.COLORMAP_TURBO)[0, 0]
+            color = cv2.applyColorMap(np.uint8([[ratio * 255]]), cv2.COLORMAP_INFERNO)[0, 0]
             cv2.line(canvas, (legend_x, legend_top + i), (legend_x + 18, legend_top + i), color.tolist(), 1)
         cv2.rectangle(canvas, (legend_x, legend_top), (legend_x + 18, legend_bottom), (70, 70, 70), 1)
         cv2.putText(canvas, "High", (legend_x - 6, legend_top - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (50, 50, 50), 1)

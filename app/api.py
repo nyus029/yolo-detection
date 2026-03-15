@@ -80,6 +80,13 @@ def register_routes(app: FastAPI, detector: YOLOPersonDetector, session_store: S
 
         return Response(content=image_bytes, media_type="image/png")
 
+    @app.get("/session/{session_id}/heatmap-data")
+    def session_heatmap_data(session_id: str) -> dict[str, Any]:
+        session = session_store.get(session_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail="session not found")
+        return session.to_heatmap_data()
+
     @app.post("/detect")
     async def detect(
         file: UploadFile = File(...),
