@@ -43,6 +43,7 @@ export type HeatmapData = {
   room_width_units: number;
   room_height_units: number;
   is_active: boolean;
+  projection: Projection;
 };
 
 export type DetectResponse = {

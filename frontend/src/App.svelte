@@ -8,7 +8,7 @@
   import { loadHistory, saveHistory } from "./lib/history";
   import { heatmapData } from "./lib/heatmapStore";
   import { setHeatmapData, startPolling, stopPolling } from "./lib/heatmapStore";
-  import type { Detection, HeatmapData, HistoryItem, SessionStatus } from "./lib/types";
+  import type { Detection, HeatmapData, HistoryItem, Projection, SessionStatus } from "./lib/types";
 
   let videoEl: HTMLVideoElement;
   let overlayEl: HTMLCanvasElement;
@@ -43,6 +43,7 @@
   let peopleCount = 0;
   let heatmapSrc = "";
   let historyItems: HistoryItem[] = [];
+  let estimatedConfidence: number | null = null;
 
   let latestHeatmap: HeatmapData | null = null;
 
@@ -73,6 +74,14 @@
       peakYLabel: `${peakY + 1}/${latestHeatmap.grid_height}`,
     };
   })();
+
+  $: currentProjection = {
+    room_width_units: Math.max(1, Number(roomWidthUnits) || 10),
+    room_height_units: Math.max(1, Number(roomHeightUnits) || 10),
+    floor_top_y_ratio: Number(floorTopYRatio) || 0.35,
+    floor_top_width_ratio: Number(floorTopWidthRatio) || 0.38,
+    floor_bottom_width_ratio: Number(floorBottomWidthRatio) || 1.0,
+  } satisfies Projection;
 
   function formatSeconds(totalSeconds: number | null | undefined): string {
     if (totalSeconds == null || Number.isNaN(totalSeconds)) return "--:--";
@@ -225,6 +234,7 @@
     await camera.ensureCamera();
     cameraActive = true;
     structureEstimated = false;
+    estimatedConfidence = null;
     statusText = "カメラ起動済み。次に部屋の構造推定を実行してください。";
   }
 
@@ -239,6 +249,7 @@
     floorTopYRatio = data.projection.floor_top_y_ratio ?? floorTopYRatio;
     floorTopWidthRatio = data.projection.floor_top_width_ratio ?? floorTopWidthRatio;
     floorBottomWidthRatio = data.projection.floor_bottom_width_ratio ?? floorBottomWidthRatio;
+    estimatedConfidence = data.confidence ?? null;
     structureEstimated = true;
     statusText = `構造推定完了 (confidence=${data.confidence ?? "n/a"})。計測開始できます。`;
   }
@@ -403,6 +414,31 @@
     </div>
   </section>
 
+  {#if structureEstimated}
+    <section class="panel structurePanel">
+      <div class="panelHeader">
+        <div>
+          <h2 class="panelTitle">構造推定プレビュー</h2>
+          <p class="subtle">簡易間取り図として解釈した部屋形状です。ヒートマップはこの平面図の上に重なります。</p>
+        </div>
+        <span class="mono">confidence {estimatedConfidence?.toFixed(2) ?? "--"}</span>
+      </div>
+      <div class="structurePreview">
+        <HeatmapCanvas
+          grid={[]}
+          maxValue={0}
+          blurRadius={0}
+          colorScheme="heat"
+          showGrid={false}
+          showStats={false}
+          roomWidthUnits={currentProjection.room_width_units}
+          roomHeightUnits={currentProjection.room_height_units}
+          projection={currentProjection}
+        />
+      </div>
+    </section>
+  {/if}
+
   <section class="panel statusPanel">
     <div class="statusBar">
       <div class="statusMeta">
@@ -450,6 +486,7 @@
               roomHeightUnits={latestHeatmap.room_height_units}
               currentCount={latestHeatmap.current_count}
               elapsedSeconds={latestHeatmap.elapsed_seconds}
+              projection={latestHeatmap.projection}
             />
           {:else}
             <div class="heatmapEmpty">計測開始後にライブヒートマップを表示します。</div>
@@ -485,6 +522,7 @@
             roomHeightUnits={latestHeatmap.room_height_units}
             currentCount={latestHeatmap.current_count}
             elapsedSeconds={latestHeatmap.elapsed_seconds}
+            projection={latestHeatmap.projection}
           />
         </div>
         <div class="resultMeta">
@@ -814,6 +852,14 @@
     grid-template-columns: minmax(0, 1fr) 44px;
     gap: 16px;
     align-items: center;
+  }
+
+  .structurePanel {
+    margin-bottom: 16px;
+  }
+
+  .structurePreview {
+    max-width: 720px;
   }
 
   .heatmapSurface,
