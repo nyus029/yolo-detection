@@ -82,6 +82,28 @@ ipconfig getifaddr en1
 - **[docs/workflow-and-architecture.md](docs/workflow-and-architecture.md)** … プロダクトの動く仕組み・ワークフロー・セッション・床面射影を図解（Mermaid）で解説
 - [docs/architecture.md](docs/architecture.md) … モジュール構成・責務・依存の向き
 
+## Ultralytics の引用表記
+
+この PoC は `ultralytics` を利用しています。Ultralytics の [`CITATION.cff`](https://github.com/ultralytics/ultralytics/blob/main/CITATION.cff) に従う場合、論文・発表・レポート等では少なくとも以下を引用する必要がある
+
+- Glenn Jocher, Jing Qiu, Ayush Chaurasia
+- *Ultralytics YOLO*
+- Version `8.0.0`
+- Released `2023-01-10`
+- Repository: <https://github.com/ultralytics/ultralytics>
+
+BibTeX 例:
+
+```bibtex
+@software{jocher_ultralytics_yolo_2023,
+  author = {Jocher, Glenn and Qiu, Jing and Chaurasia, Ayush},
+  title = {Ultralytics YOLO},
+  version = {8.0.0},
+  date = {2023-01-10},
+  url = {https://github.com/ultralytics/ultralytics}
+}
+```
+
 ## フロントエンド構成
 
 - `frontend/`: Svelte + TypeScript + Vite のソースコード
